@@ -33,7 +33,6 @@ async def check_embedding_dim():
         return {"error": "No embeddings returned"}
     
     vector_length = len(vectors[0])
-    print(vectors)
     return {"embedding_dimension": vector_length}
 
 
@@ -48,19 +47,30 @@ async def process_input(file: UploadFile = File(...)): #get file
     db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
     error = 0
     #find format of file, process it accourding to it and store it as vectors in hanaDB
+    texts = []
+
     if file_extension == ".pdf":
-        db.add_documents(func.get_text_from_pdf(file_path))
+        texts = func.get_text_from_pdf(file_path)
     elif file_extension == ".txt":
-        db.add_documents(func.get_text_from_txt(file_path))
+        texts = func.get_text_from_txt(file_path)
     elif file_extension == ".csv":
-        db.add_documents(func.get_text_from_csv(file_path))
-    else:
-        error = 1
-    
-    if error == 0:
-        return {"status": "Success", "file_name": file.filename}
+        texts = func.get_text_from_csv(file_path)
     else:
         return {"status": "File type not supported"}
+
+    MAX_TEXT_LENGTH = 255
+    for i, doc in enumerate(texts):
+        if len(doc.page_content) > MAX_TEXT_LENGTH:
+            doc.page_content = doc.page_content[:MAX_TEXT_LENGTH]
+        print(f"Page {i+1} content preview: {doc.page_content[:100]}")
+
+    print(f"Extracted {len(texts)} texts from file {file.filename}")
+    # Validate content before sending to embedding
+    if not texts or all(doc.page_content.strip() == "" for doc in texts):
+        return {"status": "File uploaded, but contains no readable content"}
+
+    db.add_documents(texts)
+    return {"status": "Success", "file_name": file.filename}
 
 
 

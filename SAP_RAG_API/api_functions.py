@@ -13,6 +13,10 @@ from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import CharacterTextSplitter
 import re
 from dotenv import load_dotenv
+from langchain.schema import Document
+import pdfplumber
+from PIL import Image
+import pytesseract
 
 load_dotenv()
 
@@ -37,13 +41,20 @@ def get_temp_file_path(file):
     return path
 
 #function to process pdf, convert it as docs and return pages
-def get_text_from_pdf(file):
-    loader = PyPDFLoader(file)
-    pages = loader.load_and_split()
-    for page in pages:
-        if page.page_content.count('/g') > 3:
-            page.page_content = decode(page.page_content)
-    return pages
+def get_text_from_pdf(file_path):
+    texts = []
+
+    with pdfplumber.open(file_path) as pdf:
+        for i, page in enumerate(pdf.pages):
+            text = page.extract_text()
+            if not text or text.strip() == "":
+                # OCR fallback if no text found
+                image = page.to_image(resolution=300).original
+                text = pytesseract.image_to_string(image)
+
+            texts.append(Document(page_content=text, metadata={"page": i + 1, "source": file_path}))
+
+    return texts
 
 #function to process csv, convert it as docs and return pages
 def get_text_from_csv(file, key_column):

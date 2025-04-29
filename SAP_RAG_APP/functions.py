@@ -1,7 +1,9 @@
 import requests
 from hdbcli import dbapi
 import pandas as pd
+import json
 import os
+from IPython.display import display
 
 
 #function to get the file content
@@ -16,15 +18,6 @@ def call_file_api(input_data):
     api_geturl = "http://127.0.0.1:8000/embedding-dim/"
     response = requests.post(api_url, files=files)
     response2 = requests.get(api_geturl)
-    if response2.status_code == 200:
-        try:
-            return response.json()
-        except requests.exceptions.JSONDecodeError:
-            print("Error: Response is not a valid JSON.")
-            return None
-    else:
-        print(f"Error: Received status code {response2.status_code}")
-        return None
     # Check if the response is successful (200 OK)
     if response.status_code == 200:
         try:
@@ -67,6 +60,10 @@ def get_table_from_cursor(cursor):
 #function to get table list from db connection
 def get_sap_table(table_name, schema, conn):
     cursor = conn.cursor()
+    cursor.execute(f'SELECT VEC_TEXT, VEC_META, TO_NVARCHAR("VEC_VECTOR") FROM {schema}."{table_name}"')
+    record_columns = cursor.fetchall()
+    for i in range(len(record_columns)):
+        display(record_columns[i])
     cursor.execute(f"SELECT VEC_META FROM "+ schema +"." + table_name)
     return get_table_from_cursor(cursor)
 

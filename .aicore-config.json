@@ -1,0 +1,11 @@
+{
+    "serviceurls": {
+      "AI_API_URL": "https://api.ai.prod.ap-southeast-2.aws.ml.hana.ondemand.com"
+    },
+    "appname": "92376755-5757-46d2-a7f6-088e4a74c92f!b54420|aicore!b1456",
+    "clientid": "sb-92376755-5757-46d2-a7f6-088e4a74c92f!b54420|aicore!b1456",
+    "clientsecret": "0aa7f2f5-83e1-4149-b7bd-7ffc722242d0$KRekCt3pC04wa90Od2Ba5YYrDw-BPGLhSGGJr1rZ4qo=",
+    "identityzone": "dial-3-0-zme762l7",
+    "identityzoneid": "ebe2c433-a357-4e82-9f3c-09f5a4323f66",
+    "url": "https://dial-3-0-zme762l7.authentication.ap10.hana.ondemand.com"
+  }

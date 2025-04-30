@@ -60,11 +60,10 @@ def get_table_from_cursor(cursor):
 #function to get table list from db connection
 def get_sap_table(table_name, schema, conn):
     cursor = conn.cursor()
-    cursor.execute(f'SELECT VEC_TEXT, VEC_META, TO_NVARCHAR("VEC_VECTOR") FROM {schema}."{table_name}"')
-    record_columns = cursor.fetchall()
-    for i in range(len(record_columns)):
-        display(record_columns[i])
     cursor.execute(f"SELECT VEC_META FROM "+ schema +"." + table_name)
+    # record_columns = cursor.fetchall()
+    # for i in range(len(record_columns)):
+    #     display(record_columns[i])
     return get_table_from_cursor(cursor)
 
 

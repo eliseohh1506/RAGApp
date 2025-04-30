@@ -6,6 +6,7 @@ from langchain_community.vectorstores.hanavector import HanaDB
 from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from langchain_huggingface import HuggingFaceEndpoint
 from langchain.memory import ChatMessageHistory
+from gen_ai_hub.proxy.langchain.openai import ChatOpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,6 +17,11 @@ app = FastAPI()
 #get HuggingFace token and login to HuggingFace
 HF_key = os.environ.get("HF_TOKEN")
 HFapi = HfApi(HF_key)
+os.environ["AICORE_AUTH_URL"] = os.environ.get("AICORE_AUTH_URL")
+os.environ["AICORE_CLIENT_ID"] = os.environ.get("AICORE_CLIENT_ID")
+os.environ["AICORE_CLIENT_SECRET"] = os.environ.get("AICORE_CLIENT_SECRET")
+os.environ["AICORE_BASE_URL"] = os.environ.get("AICORE_BASE_URL")
+os.environ["AICORE_RESOURCE_GROUP"]= os.environ.get("AICORE_RESOURCE_GROUP")
 
 #create hanaDB connection and embeddings
 conn = func.get_hana_db_conn()
@@ -78,14 +84,9 @@ async def process_input(file: UploadFile = File(...)): #get file
 @app.post("/chat")
 async def process_input(query: str = Form(...), file_name: str = Form("Temp")): #get query and file name
 
+    id = os.environ.get("LLM_DEPLOYMENT_ID")
     #create llm 
-    llm = HuggingFaceEndpoint(
-        repo_id="mistralai/Mistral-7B-Instruct-v0.3",
-        task="text-generation",
-        max_new_tokens=512,
-        do_sample=False,
-        repetition_penalty=1.03,
-    )
+    llm = ChatOpenAI(deployment_id=id)
 
     #create vector connection
     db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")

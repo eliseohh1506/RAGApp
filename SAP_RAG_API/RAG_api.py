@@ -64,14 +64,8 @@ async def process_input(file: UploadFile = File(...)): #get file
     else:
         return {"status": "File type not supported"}
 
-    MAX_TEXT_LENGTH = 255
-    for i, doc in enumerate(texts):
-        if len(doc.page_content) > MAX_TEXT_LENGTH:
-            doc.page_content = doc.page_content[:MAX_TEXT_LENGTH]
-        print(f"Page {i+1} content preview: {doc.page_content[:100]}")
+    print(f"Extracted {len(texts)} chunks from file {file.filename}")
 
-    print(f"Extracted {len(texts)} texts from file {file.filename}")
-    # Validate content before sending to embedding
     if not texts or all(doc.page_content.strip() == "" for doc in texts):
         return {"status": "File uploaded, but contains no readable content"}
 

@@ -11,6 +11,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.docstore.document import Document
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import CharacterTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 import re
 from dotenv import load_dotenv
 from langchain.schema import Document
@@ -43,6 +44,10 @@ def get_temp_file_path(file):
 #function to process pdf, convert it as docs and return pages
 def get_text_from_pdf(file_path):
     texts = []
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=50,
+    )
 
     with pdfplumber.open(file_path) as pdf:
         for i, page in enumerate(pdf.pages):
@@ -52,7 +57,12 @@ def get_text_from_pdf(file_path):
                 image = page.to_image(resolution=300).original
                 text = pytesseract.image_to_string(image)
 
-            texts.append(Document(page_content=text, metadata={"page": i + 1, "source": file_path}))
+            # Create a document with metadata
+            doc = Document(page_content=text, metadata={"page": i + 1, "source": file_path})
+
+            # Chunk this single page-document while preserving metadata
+            chunks = text_splitter.split_documents([doc])
+            texts.extend(chunks)
 
     return texts
 
@@ -74,7 +84,13 @@ def get_text_from_txt(file):
 def get_llm_chain(llm, db, file_name):
 
     # set the prompt templte
-    prompt_template = """Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer. Keep the answer as concise as possible. Always say "thanks for asking!" at the end of the answer. Give the answer in the form of markdown.
+    prompt_template = """Use the following pieces of context to answer the question at the end. 
+        If you don't know the answer, just say that you don't know, don't try to make up an answer. 
+        Keep the answer as concise as possible. Dont format as code block unless the question is about code.
+        Include the source file name and page number. If cannot find source file name or page number,
+        then set it as 'Unknown'.
+        Separate the file name and page number with a line break, label them.
+        Give the answer in the form of markdown.
     Context: {context}
     Question: {question}
     """

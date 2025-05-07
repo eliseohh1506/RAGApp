@@ -175,7 +175,6 @@ def dox_get_fields(name):
 
         if response.status_code == 200:
             results = response.json().get("extraction")
-            print(results)
             return results
         else:
             raise Exception(f"Failed to get DOX Documents: {response.status_code} - {response.text}")

@@ -100,8 +100,10 @@ if chat_mode == "File Upload":
 
     #upload fileof type csv, txt, pdf
     fileContract = st.sidebar.file_uploader("Upload a Contract/Policy file", type=["csv", "txt", "pdf"])
+    #TO DO handle upload to DOX API
     fileInvoice = st.sidebar.file_uploader("Upload an Invoice for Compliance Check", type=["csv", "txt", "pdf"])
     doc_list = get_uploaded_docs()
+    invoice_list = get_dox_documents()
 
     # if file is already exist in db then show message, if not then call the funciton to upload the file into db by vectorize it.
     if fileContract is not None:
@@ -120,6 +122,9 @@ if chat_mode == "File Upload":
             if fileContract.name in doc_list:
                 st.sidebar.write("File Name already Exist")
 
+    # if fileInvoice is not None:
+    #     if fileContract.name not in invoice_list:
+    #         api_output = 
 
 # if chat with pre-uploaded docs
 elif chat_mode == "Chat with Pre-Uploaded Data":

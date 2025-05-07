@@ -71,6 +71,8 @@ It can be integrate with any application using iframe.
 
 - Create a new folder and nagagitate to it in command prompt (windows).
 
+- Ensure Python version is 3.12.3
+
 - Clone this repository using
     
         git clone https://github.com/KARTHIKEYAN-31/SAP-RAG-ChatBot/tree/main

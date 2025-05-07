@@ -4,9 +4,11 @@ import os
 import api_functions as func
 from langchain_community.vectorstores.hanavector import HanaDB
 from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
-from langchain_huggingface import HuggingFaceEndpoint
+# from langchain_huggingface import HuggingFaceEndpoint
 from langchain.memory import ChatMessageHistory
 from gen_ai_hub.proxy.langchain.openai import ChatOpenAI
+# OpenAIEmbeddings to create text embeddings
+from gen_ai_hub.proxy.langchain.openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,9 +27,10 @@ os.environ["AICORE_RESOURCE_GROUP"]= os.environ.get("AICORE_RESOURCE_GROUP")
 
 #create hanaDB connection and embeddings
 conn = func.get_hana_db_conn()
-embeddings = HuggingFaceInferenceAPIEmbeddings(
-    api_key=HF_key, model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+embeddings = OpenAIEmbeddings(deployment_id=os.environ.get("EMBEDDING_DEPLOYMENT_ID"))
+# embeddings = HuggingFaceInferenceAPIEmbeddings(
+#     api_key=HF_key, model_name="sentence-transformers/all-MiniLM-L6-v2"
+# )
 history = ChatMessageHistory()
 
 @app.get("/embedding-dim")
@@ -76,7 +79,7 @@ async def process_input(file: UploadFile = File(...)): #get file
 
 #endpoint to process query and return answer
 @app.post("/chat")
-async def process_input(query: str = Form(...), file_name: str = Form("Temp")): #get query and file name
+async def process_input(query: str = Form(...), file_name: str = Form("Temp"), invoiceDetails: str = Form(...)): #get query and file name
 
     id = os.environ.get("LLM_DEPLOYMENT_ID")
     #create llm 
@@ -86,7 +89,7 @@ async def process_input(query: str = Form(...), file_name: str = Form("Temp")): 
     db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
 
     #create QA chain
-    qa_chain = func.get_llm_chain(llm, db, file_name)
+    qa_chain = func.get_llm_chain(llm, db, file_name, invoiceDetails)
 
     #get answer
     result = qa_chain.invoke({"question": query, "chat_history": []})

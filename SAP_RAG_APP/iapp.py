@@ -12,7 +12,7 @@ def init_chat():
         # st.write('exe')
         response = func.call_chat_api(prompt)
     else:
-        response = func.call_chat_api(prompt, st.session_state.file_name)
+        response = func.call_chat_api(prompt, st.session_state.policy_doc)
     ans = func.get_source(response)
     with st.chat_message("assistant"):
         st.markdown(ans)

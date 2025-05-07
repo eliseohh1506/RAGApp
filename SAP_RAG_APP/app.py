@@ -2,7 +2,6 @@ import streamlit as st
 import functions as func
 import os
 
-
 #function to clear the local chat history
 @st.experimental_fragment
 def clear_chat():
@@ -16,12 +15,7 @@ def init_chat():
     st.chat_message("user").markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    #check if chat with all docs or a selected doc
-    if all_doc == True:
-        # st.write('exe')
-        response = func.call_chat_api(prompt)
-    else:
-        response = func.call_chat_api(prompt, st.session_state.file_name)
+    response = func.call_chat_api(prompt, st.session_state.policy_doc)
 
     #write and save assistant response
     with st.chat_message("assistant"):
@@ -36,10 +30,23 @@ def get_uploaded_docs():
     df = func.get_sap_table('MAV_SAP_RAG', 'DBADMIN', conn)
     if df.shape[0] != 0:
         doc_list = [eval(d).get("source") for d in df['VEC_META']]
+        # print("doclist: ", doc_list)
         df['file_name'] = [os.path.basename(path) for path in doc_list]
         doc_list = df['file_name'].unique()
         return doc_list
     else: 
+        return []
+
+@st.experimental_fragment
+def get_dox_documents():
+    #Connect to DOX
+    func.connect_dox_api()
+    results = func.dox_get_all_documents()
+    if results and isinstance(results, list):
+        doc_list = [os.path.basename(doc["fileName"]) for doc in results if "fileName" in doc]
+        doc_list = list(set(doc_list))  # optional: remove duplicates
+        return doc_list
+    else:
         return []
 
 
@@ -68,8 +75,10 @@ st.set_page_config(
 #declare session state variables to store chat history and file name
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "file_name" not in st.session_state:
-    st.session_state.file_name = ""
+if "policy_doc" not in st.session_state:
+    st.session_state.policy_doc = ""
+if "invoice" not in st.session_state:
+    st.session_state.invoice = {}
 
  
 
@@ -90,14 +99,15 @@ chat_mode = st.sidebar.selectbox("How do you want to start the chat?", ( "Chat w
 if chat_mode == "File Upload":
 
     #upload fileof type csv, txt, pdf
-    file = st.sidebar.file_uploader("Upload a file to Chat with", type=["csv", "txt", "pdf"])
+    fileContract = st.sidebar.file_uploader("Upload a Contract/Policy file", type=["csv", "txt", "pdf"])
+    fileInvoice = st.sidebar.file_uploader("Upload an Invoice for Compliance Check", type=["csv", "txt", "pdf"])
     doc_list = get_uploaded_docs()
 
     # if file is already exist in db then show message, if not then call the funciton to upload the file into db by vectorize it.
-    if file is not None:
+    if fileContract is not None:
 
-        if file.name not in doc_list:
-            api_output = func.call_file_api(file)
+        if fileContract.name not in doc_list:
+            api_output = func.call_file_api(fileContract)
             st.sidebar.write(api_output["status"])
             st.session_state.file_name = api_output["file_name"]
             if api_output["status"] == "Success":
@@ -107,18 +117,20 @@ if chat_mode == "File Upload":
                 if prompt := st.chat_input("Come on lets Chat!"):
                     init_chat()
         else:
-            if file.name in doc_list:
+            if fileContract.name in doc_list:
                 st.sidebar.write("File Name already Exist")
 
 
 # if chat with pre-uploaded docs
 elif chat_mode == "Chat with Pre-Uploaded Data":
     doc_list = get_uploaded_docs() #get list of uploaded docs from db
-    all_doc = st.sidebar.toggle("All Documents", ) #check if chat with all docs or a selected doc
+    invoice_list = get_dox_documents()
+    policy_doc = st.sidebar.selectbox("Select Policy Document", doc_list)
+    st.session_state.policy_doc = policy_doc
+    # all_invoice = st.sidebar.toggle("All Documents", ) #check if chat with all docs or a selected doc
     # if not all docs then select doc from sidebar
-    if all_doc == False: 
-        file_name = st.sidebar.selectbox("Select Document", doc_list)
-        st.session_state.file_name = file_name
+    invoice = st.sidebar.selectbox("Select Document to check for compliance", invoice_list)
+    st.session_state.invoice = func.dox_get_fields(invoice)
 
     #load chat history from local history
     for message in st.session_state.messages:
@@ -133,11 +145,8 @@ elif chat_mode == "Chat with Pre-Uploaded Data":
 
 
     #clear data from db based on selection by clicking button
-    if clear_data := st.sidebar.button("Clear Data from DB", key="clear_data"):
-        if all_doc:
-            clear_data_db()
-        else:
-            clear_data_db(file_name)
+    if clear_data := st.sidebar.button("Clear Policy Documents from DB", key="clear_data"):
+        clear_data_db(policy_doc)
     
 
 

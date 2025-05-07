@@ -10,7 +10,6 @@ from hdbcli import dbapi
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.docstore.document import Document
 from langchain_community.document_loaders import TextLoader
-from langchain_text_splitters import CharacterTextSplitter
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import re
 from dotenv import load_dotenv
@@ -27,7 +26,7 @@ def get_hana_db_conn():
     conn = dbapi.connect(
             address=os.environ.get("Hostname"),
             port=os.environ.get("Port"),
-            user=os.environ.get("Username"),
+            user=os.environ.get("HANA_USERNAME"),
             password=os.environ.get("Password"),
     )
     return conn
@@ -68,20 +67,45 @@ def get_text_from_pdf(file_path):
 
 #function to process csv, convert it as docs and return pages
 def get_text_from_csv(file, key_column):
+    texts = []
     df = pd.read_csv(file)
-    loader = DataFrameLoader(data_frame=df, page_content_column=key_column)
-    pages = loader.load()
-    return pages
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+
+    for i, row in df.iterrows():
+        content = str(row[key_column])
+        metadata = {
+            "row": i + 1,
+            "source": file,
+            "filename": os.path.basename(file)
+        }
+        doc = Document(page_content=content, metadata=metadata)
+        chunks = text_splitter.split_documents([doc])
+        texts.extend(chunks)
+
+    return texts
 
 #function to process txt, convert it as docs and return pages
 def get_text_from_txt(file):
-    text_documents = TextLoader(file).load()
-    text_splitter = CharacterTextSplitter(chunk_size=250, chunk_overlap=20)
-    text_chunks = text_splitter.split_documents(text_documents)
-    return text_chunks
+    texts = []
+    loader = TextLoader(file)
+    text_documents = loader.load()
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+
+    for i, doc in enumerate(text_documents):
+        # Add metadata like in PDF
+        doc.metadata.update({
+            "page": i + 1,
+            "source": file,
+            "filename": os.path.basename(file)
+        })
+        chunks = text_splitter.split_documents([doc])
+        texts.extend(chunks)
+
+    return texts
 
 #function to create llm-chain and return it
-def get_llm_chain(llm, db, file_name):
+#TO DO - incorporate details from DOX to cross check with policy documents. 
+def get_llm_chain(llm, db, file_name, invoiceDetails):
 
     # set the prompt templte
     prompt_template = """Use the following pieces of context to answer the question at the end. 

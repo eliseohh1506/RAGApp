@@ -1,10 +1,10 @@
 # SAP RAG Chatbot
 
-This is a chat application used to chat with your data in a document.
+This is a chat application used to cross check documents against policy to see if documents are compliant 
 It uses:
 - SAP HANA vector store to store vectors
-- Mistral-7B-Instruct-v0.3 as chat LLM
-- all-MiniLM-l6-v2 as embeddings LLM 
+- SAP DoX API to upload invoices, retrieve extracted fields
+- Embeddings and Chat LLM are both deployed on SAP AI Launchpad
 - FastAPI for api, Langchain for DevOps and AI chain
 - Streamlit for application.
 
@@ -75,17 +75,23 @@ It can be integrate with any application using iframe.
 
 - Clone this repository using
     
-        git clone https://github.com/KARTHIKEYAN-31/SAP-RAG-ChatBot/tree/main
+        git clone https://github.com/eliseohh1506/RAGApp.git
+
+- Create virtual environment 
 
 - Install required libraries
     
         pip install -r requirements.txt
+
+        pip install --require-virtualenv generative-ai-hub-sdk[all]
+
+        pip install --require-virtualenv hdbcli
   
-- set the environment variables like hugging face api, hana DB credientials.
+- set the environment variables like hana DB credientials, DOX credentials.
 
 - Run api locally by the following command
 
-        uvirorn RAG_api:app --reload
+        uvicorn RAG_api:app --reload
 
 - To run the streamlit application
 

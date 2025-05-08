@@ -4,6 +4,7 @@ from hdbcli import dbapi
 import pandas as pd
 import json
 import os
+import mimetypes
 from IPython.display import display
 from dotenv import load_dotenv
 load_dotenv()
@@ -29,6 +30,42 @@ def call_file_api(input_data):
     else:
         print(f"Error: Received status code {response.status_code}")
         return None
+
+#function to upload file to dox api
+def dox_upload_file(file, document_type, schema_name):
+    url = os.environ.get("DOXURL") + "document/jobs"
+    accessToken = os.environ.get("DOX_ACCESS_TOKEN")
+
+    mime_type, _ = mimetypes.guess_type(file.name)
+    if mime_type is None:
+        mime_type = 'application/octet-stream'
+
+    headers = {
+        "accept": "application/json",
+        "Authorization": f"Bearer {accessToken}"
+    }
+    files = {
+        'file': (file.name, file, mime_type), 
+        'options': (
+            None,
+            json.dumps({
+                "schemaName": schema_name,
+                "clientId": os.environ.get("DOX_CLIENT_NAME"),
+                "documentType": document_type,
+            }),
+            'application/json'
+        )
+    }
+    response = requests.post(
+        url,
+        headers=headers,
+        files=files
+    )
+    if response.status_code == 201:
+        results = response.json()
+        return results
+    else:
+        raise Exception(f"Failed to upload file to DOX: {response.status_code} - {response.text}")
 
 #function to call the chat api
 def call_chat_api(query, file_name = None, invoiceDetails = None, history = None):
@@ -126,7 +163,7 @@ def connect_dox_api():
     else:
         raise Exception(f"Failed to get access token: {response.status_code} - {response.text}")
 
-# get all docume
+# get all documents in DoX
 def dox_get_all_documents():   
     clientID = os.environ.get("DOX_CLIENT_NAME")
     url = os.environ.get("DOXURL") + "document/jobs" + f"?clientId={clientID}"
@@ -150,6 +187,7 @@ def dox_get_all_documents():
     else:
         raise Exception(f"Failed to get DOX Documents: {response.status_code} - {response.text}")
 
+# function to get the fields of a DOX document
 def dox_get_fields(name):
     results = dox_get_all_documents()
     id = ""
@@ -178,3 +216,22 @@ def dox_get_fields(name):
             return results
         else:
             raise Exception(f"Failed to get DOX Documents: {response.status_code} - {response.text}")
+        
+def dox_get_schemas():
+    clientID = os.environ.get("DOX_CLIENT_NAME")
+    url = os.environ.get("DOXURL") + "schemas" + f"?clientId={clientID}"
+    accessToken = os.environ.get("DOX_ACCESS_TOKEN")
+    headers = {
+        "accept": "application/json",
+        "Authorization": f"Bearer {accessToken}"
+    }
+    response = requests.get(
+        url,
+        headers=headers
+    )
+    if response.status_code == 200:
+        results = response.json().get("schemas")
+        active_schemas = [schema for schema in results if schema.get("state") == "active"]
+        return active_schemas
+    else:
+        raise Exception(f"Failed to get DOX Documents: {response.status_code} - {response.text}")

@@ -86,6 +86,8 @@ It can be integrate with any application using iframe.
         pip install --require-virtualenv generative-ai-hub-sdk[all]
 
         pip install --require-virtualenv hdbcli
+
+        pip install ipython
   
 - set the environment variables like hana DB credientials, DOX credentials.
 

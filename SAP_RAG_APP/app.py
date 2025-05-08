@@ -48,6 +48,24 @@ def get_dox_documents():
         return doc_list
     else:
         return []
+    
+@st.experimental_fragment
+def get_dox_document_type():
+    func.connect_dox_api()
+    results = func.dox_get_schemas()
+    unique_document_types = sorted({schema.get("documentType") for schema in results})
+    return unique_document_types
+
+@st.experimental_fragment
+def get_dox_schema(document_type):
+    func.connect_dox_api()
+    results = func.dox_get_schemas()
+    matching_schemas = [
+        schema.get("name")
+        for schema in results
+        if schema.get("state") == "active" and schema.get("documentType") == document_type
+    ]
+    return sorted(matching_schemas)
 
 
 #fuction to clear data of selected or all docs from hana DB
@@ -100,8 +118,11 @@ if chat_mode == "File Upload":
 
     #upload fileof type csv, txt, pdf
     fileContract = st.sidebar.file_uploader("Upload a Contract/Policy file", type=["csv", "txt", "pdf"])
-    #TO DO handle upload to DOX API
-    fileInvoice = st.sidebar.file_uploader("Upload an Invoice for Compliance Check", type=["csv", "txt", "pdf"])
+    fileInvoice = st.sidebar.file_uploader("Upload an Invoice for Compliance Check", type=["jpeg", "png", "pdf"])
+    dox_doc_type = st.sidebar.selectbox("Select Document Type", (get_dox_document_type()))
+    dox_schema = st.sidebar.selectbox("Select Schema", (get_dox_schema(dox_doc_type)))
+    # TO DO - add a button to upload the file to DOX
+    # st.sidebar.button("Upload Invoice Document", key="upload_doc", on_click=func.dox_upload_file, args=(fileInvoice, dox_doc_type, dox_schema))
     doc_list = get_uploaded_docs()
     invoice_list = get_dox_documents()
 
@@ -122,9 +143,21 @@ if chat_mode == "File Upload":
             if fileContract.name in doc_list:
                 st.sidebar.write("File Name already Exist")
 
-    # if fileInvoice is not None:
-    #     if fileContract.name not in invoice_list:
-    #         api_output = 
+    if fileInvoice is not None:
+        if fileInvoice.name not in invoice_list:
+            api_output = func.dox_upload_file(fileInvoice, "invoice", "SAP_invoice_schema")
+            st.session_state.file_name = api_output["file_name"]
+            if api_output["status"] == "PENDING":
+                st.sidebar.write("File is being processed")
+                for message in st.session_state.messages:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["content"])
+                if prompt := st.chat_input("Come on lets Chat!"):
+                    init_chat()
+            else:
+                st.sidebar.write("Upload Failed")
+        else:
+            st.sidebar.write("File Name already Exist")
 
 # if chat with pre-uploaded docs
 elif chat_mode == "Chat with Pre-Uploaded Data":

@@ -92,13 +92,13 @@ def get_text_from_txt(file):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 
     for i, doc in enumerate(text_documents):
-        # Add metadata like in PDF
-        doc.metadata.update({
-            "page": i + 1,
-            "source": file,
-            "filename": os.path.basename(file)
-        })
         chunks = text_splitter.split_documents([doc])
+        for chunk in chunks:
+            chunk.metadata.update({
+                "page": i + 1,
+                "source": file,
+                "filename": os.path.basename(file)
+            })
         texts.extend(chunks)
 
     return texts
@@ -108,35 +108,56 @@ def get_text_from_txt(file):
 def get_llm_chain(llm, db, file_name, invoiceDetails):
 
     # set the prompt templte
-    prompt_template = """Use the following pieces of context to answer the question at the end. 
-        If you don't know the answer, just say that you don't know, don't try to make up an answer. 
-        Keep the answer as concise as possible. Dont format as code block unless the question is about code.
-        Include the source file name and page number. If cannot find source file name or page number,
-        then set it as 'Unknown'.
-        Separate the file name and page number with a line break, label them.
-        Give the answer in the form of markdown.
-    Context: {context}
-    Question: {question}
+    prompt_template = """
+    You are a compliance assistant. Based on the extracted invoice fields and the policy document context, determine if the invoice is compliant.
+
+    ### Extracted Invoice Fields:
+    {invoiceDetails}
+    
+    ### Policy Document Context:
+    {context}
+
+    ### User Question:
+    {question}
+
+    Rules:
+    - Be concise and explain which fields are compliant or non-compliant.
+    - Include the **file name** and **page number** for each policy rule you refer to. If unknown, write 'Unknown'.
     """
     PROMPT = PromptTemplate(
-        template=prompt_template, input_variables=["context", "question"]
+        template=prompt_template,
+        input_variables=["question", "invoiceDetails"]
     )
 
-    # create memory and llm-chain
+    # Use ConversationalRetrievalChain manually constructed
     memory = ConversationBufferMemory(
-        memory_key="chat_history", output_key="answer", return_messages=True
+        memory_key="chat_history",
+        input_key="question",
+        output_key="answer",
+        return_messages=True
     )
+
+    retriever = db.as_retriever(
+        search_type="similarity_score_threshold",
+        search_kwargs={
+            "k": 5,
+            "score_threshold": 0.3,
+            "filter": {"source": {"$like": "%" + file_name + "%"}}
+        }
+    )
+
+    # Create the chain that integrates memory, retriever, and the prompt
     qa_chain = ConversationalRetrievalChain.from_llm(
         llm,
-        db.as_retriever(search_type="similarity_score_threshold",
-            search_kwargs={"k": 5,
-                            'score_threshold': 0.3,
-                            "filter":{"source":{"$like": "%"+file_name+"%"}}}),
-        return_source_documents=True,
+        retriever,
         memory=memory,
-        verbose=False,
-        combine_docs_chain_kwargs={"prompt": PROMPT},
+        return_source_documents=True,
+        combine_docs_chain_kwargs={
+            "prompt": PROMPT,
+            "document_variable_name": "context"
+        }
     )
+
     return qa_chain
 
 #function to extract answer from string

@@ -5,7 +5,7 @@ import api_functions as func
 from langchain_community.vectorstores.hanavector import HanaDB
 from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 # from langchain_huggingface import HuggingFaceEndpoint
-from langchain.memory import ChatMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
 from gen_ai_hub.proxy.langchain.openai import ChatOpenAI
 # OpenAIEmbeddings to create text embeddings
 from gen_ai_hub.proxy.langchain.openai import OpenAIEmbeddings
@@ -79,7 +79,7 @@ async def process_input(file: UploadFile = File(...)): #get file
 
 #endpoint to process query and return answer
 @app.post("/chat")
-async def process_input(query: str = Form(...), file_name: str = Form("Temp"), invoiceDetails: str = Form(...)): #get query and file name
+async def process_input(query: str = Form(...), file_name: str = Form("Temp"), invoiceDetails: str = Form({})): #get query and file name
 
     id = os.environ.get("LLM_DEPLOYMENT_ID")
     #create llm 
@@ -91,8 +91,12 @@ async def process_input(query: str = Form(...), file_name: str = Form("Temp"), i
     #create QA chain
     qa_chain = func.get_llm_chain(llm, db, file_name, invoiceDetails)
 
+    question_with_invoice = {
+        "question": query,
+        "invoiceDetails": invoiceDetails
+    }
     #get answer
-    result = qa_chain.invoke({"question": query, "chat_history": []})
+    result = qa_chain.invoke(question_with_invoice)
 
     return result
 

@@ -15,7 +15,7 @@ def init_chat():
     st.chat_message("user").markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    response = func.call_chat_api(prompt, st.session_state.policy_doc)
+    response = func.call_chat_api(prompt, st.session_state.policy_doc, st.session_state.invoice)
 
     #write and save assistant response
     with st.chat_message("assistant"):
@@ -121,10 +121,41 @@ if chat_mode == "File Upload":
     fileInvoice = st.sidebar.file_uploader("Upload an Invoice for Compliance Check", type=["jpeg", "png", "pdf"])
     dox_doc_type = st.sidebar.selectbox("Select Document Type", (get_dox_document_type()))
     dox_schema = st.sidebar.selectbox("Select Schema", (get_dox_schema(dox_doc_type)))
+    
+    st.session_state.upload_file = fileInvoice
+    st.session_state.upload_doc_type = dox_doc_type
+    st.session_state.upload_schema = dox_schema
+    
+    def handle_invoice_upload():
+        file = st.session_state.get("upload_file")
+        doc_type = st.session_state.get("upload_doc_type", "invoice")
+        schema = st.session_state.get("upload_schema", "SAP_invoice_schema")
+
+        if file:
+            invoice_list = get_dox_documents()
+            if file.name not in invoice_list:
+                api_output = func.dox_upload_file(file, doc_type, schema)
+                st.session_state.file_name = api_output.get("file_name")
+                if api_output.get("status") == "PENDING":
+                    st.session_state.upload_msg = "File is being processed"
+                    for message in st.session_state.get("messages", []):
+                        with st.chat_message(message["role"]):
+                            st.markdown(message["content"])
+                    if prompt := st.chat_input("Come on lets Chat!"):
+                        init_chat()
+                else:
+                    st.session_state.upload_msg = "Upload Failed"
+            else:
+                st.session_state.upload_msg = "File Name already Exist"
+        else:
+            st.session_state.upload_msg = "No file selected"
+
     # TO DO - add a button to upload the file to DOX
-    # st.sidebar.button("Upload Invoice Document", key="upload_doc", on_click=func.dox_upload_file, args=(fileInvoice, dox_doc_type, dox_schema))
+    st.sidebar.button("Upload Invoice Document", key="upload_doc", on_click=handle_invoice_upload)
+    
+    if "upload_msg" in st.session_state:
+        st.sidebar.write(st.session_state.upload_msg)
     doc_list = get_uploaded_docs()
-    invoice_list = get_dox_documents()
 
     # if file is already exist in db then show message, if not then call the funciton to upload the file into db by vectorize it.
     if fileContract is not None:
@@ -142,22 +173,6 @@ if chat_mode == "File Upload":
         else:
             if fileContract.name in doc_list:
                 st.sidebar.write("File Name already Exist")
-
-    if fileInvoice is not None:
-        if fileInvoice.name not in invoice_list:
-            api_output = func.dox_upload_file(fileInvoice, "invoice", "SAP_invoice_schema")
-            st.session_state.file_name = api_output["file_name"]
-            if api_output["status"] == "PENDING":
-                st.sidebar.write("File is being processed")
-                for message in st.session_state.messages:
-                    with st.chat_message(message["role"]):
-                        st.markdown(message["content"])
-                if prompt := st.chat_input("Come on lets Chat!"):
-                    init_chat()
-            else:
-                st.sidebar.write("Upload Failed")
-        else:
-            st.sidebar.write("File Name already Exist")
 
 # if chat with pre-uploaded docs
 elif chat_mode == "Chat with Pre-Uploaded Data":

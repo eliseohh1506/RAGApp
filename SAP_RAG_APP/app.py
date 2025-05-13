@@ -16,11 +16,11 @@ def init_chat():
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     response = func.call_chat_api(prompt, st.session_state.policy_doc, st.session_state.invoice)
-
+    ans = func.get_source(response)
     #write and save assistant response
     with st.chat_message("assistant"):
-        st.write(response['answer'])
-    st.session_state.messages.append({"role": "assistant", "content": response['answer']})
+        st.write(ans)
+    st.session_state.messages.append({"role": "assistant", "content": ans})
 
 
 #function to get list of uploaded docs from db

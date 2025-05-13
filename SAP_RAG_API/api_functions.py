@@ -109,7 +109,7 @@ def get_llm_chain(llm, db, file_name, invoiceDetails):
 
     # set the prompt templte
     prompt_template = """
-    You are a compliance assistant. Based on the extracted invoice fields and the policy document context, determine if the invoice is compliant.
+    You are a compliance assistant. Based on the extracted invoice fields and the policy document context, answer the user question.
 
     ### Extracted Invoice Fields:
     {invoiceDetails}
@@ -121,7 +121,8 @@ def get_llm_chain(llm, db, file_name, invoiceDetails):
     {question}
 
     Rules:
-    - Be concise and explain which fields are compliant or non-compliant.
+    - Answer question directly and concised
+    - Be concise and explain which fields are compliant or non-compliant if asked to compare extracted fields against policy document.
     - Include the **file name** and **page number** for each policy rule you refer to. If unknown, write 'Unknown'.
     """
     PROMPT = PromptTemplate(

@@ -57,7 +57,7 @@ def get_text_from_pdf(file_path):
                 text = pytesseract.image_to_string(image)
 
             # Create a document with metadata
-            doc = Document(page_content=text, metadata={"page": i + 1, "source": file_path})
+            doc = Document(page_content=text, metadata={"page": i + 1, "source": file_path, "filename": os.path.basename(file_path)})
 
             # Chunk this single page-document while preserving metadata
             chunks = text_splitter.split_documents([doc])
@@ -122,6 +122,7 @@ def get_llm_chain(llm, db, file_name, invoiceDetails):
 
     Rules:
     - Answer question directly and concised
+    - If no compliance check implied by user question, don't do compliance check
     - Be concise and explain which fields are compliant or non-compliant if asked to compare extracted fields against policy document.
     - Include the **file name** and **page number** for each policy rule you refer to. If unknown, write 'Unknown'.
     """

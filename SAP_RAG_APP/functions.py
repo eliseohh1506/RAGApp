@@ -17,9 +17,7 @@ def read_file(filepath):
 def call_file_api(input_data):
     files = {"file": input_data}
     api_url = "http://127.0.0.1:8000/upload/"
-    api_geturl = "http://127.0.0.1:8000/embedding-dim/"
     response = requests.post(api_url, files=files)
-    response2 = requests.get(api_geturl)
     # Check if the response is successful (200 OK)
     if response.status_code == 200:
         try:
@@ -76,7 +74,7 @@ def call_chat_api(query, file_name = None, invoiceDetails = None, history = None
                   "invoiceDetails": json.dumps(invoiceDetails) if invoiceDetails else "{}"}
     api_url = "http://127.0.0.1:8000/chat/"
     resp = requests.post(api_url, data=querys)
-    print(resp.status_code, resp.text)
+    # print(resp.status_code, resp.text)
     response = resp.json()  # only if status and content look correct
 
     return response
@@ -220,6 +218,18 @@ def dox_get_fields(name):
             return results
         else:
             raise Exception(f"Failed to get DOX Documents: {response.status_code} - {response.text}")
+        
+# function to get the id of a DOX document
+def dox_getId(name):
+    results = dox_get_all_documents()
+    id = ""
+    for result in results:
+        if result.get("fileName") == name:
+            id = result.get("id")
+            return id
+
+    if not (id):
+        raise Exception(f"Cannot match document name to document ID")
         
 def dox_get_schemas():
     clientID = os.environ.get("DOX_CLIENT_NAME")

@@ -1,6 +1,8 @@
 import streamlit as st 
 import functions as func
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 #function to clear the local chat history
 @st.experimental_fragment
@@ -19,8 +21,8 @@ def init_chat():
     ans = func.get_source(response)
     #write and save assistant response
     with st.chat_message("assistant"):
-        st.write(ans)
-    st.session_state.messages.append({"role": "assistant", "content": ans})
+        st.write(response['answer'])
+    st.session_state.messages.append({"role": "assistant", "content": response['answer']})
 
 
 #function to get list of uploaded docs from db
@@ -97,6 +99,8 @@ if "policy_doc" not in st.session_state:
     st.session_state.policy_doc = ""
 if "invoice" not in st.session_state:
     st.session_state.invoice = {}
+if "invoiceId" not in st.session_state:
+    st.session_state.invoiceId = ""
 
  
 
@@ -179,12 +183,25 @@ elif chat_mode == "Chat with Pre-Uploaded Data":
     doc_list = get_uploaded_docs() #get list of uploaded docs from db
     invoice_list = get_dox_documents()
     policy_doc = st.sidebar.selectbox("Select Policy Document", doc_list)
+    st.sidebar.button("Download policy document")
     st.session_state.policy_doc = policy_doc
     # all_invoice = st.sidebar.toggle("All Documents", ) #check if chat with all docs or a selected doc
     # if not all docs then select doc from sidebar
     invoice = st.sidebar.selectbox("Select Document to check for compliance", invoice_list)
+    st.session_state.invoiceId = func.dox_getId(invoice)
     st.session_state.invoice = func.dox_get_fields(invoice)
+    url = f"{os.environ.get('DOX_UI_URL')}clientId={os.environ.get('DOX_CLIENT_NAME')}#/invoiceviewer&/iv/detailDetail/{st.session_state.invoiceId}/TwoColumnsBeginExpanded"
 
+    st.sidebar.markdown(
+        f"""
+        <a href="{url}" target="_blank">
+            <button style="background-color:#FFFFFF;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:pointer;margin-bottom: 20px">
+                📄 Check Invoice Extracted Fields
+            </button>
+        </a>
+        """,
+        unsafe_allow_html=True
+    )
     #load chat history from local history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):

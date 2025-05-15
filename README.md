@@ -89,7 +89,7 @@ It can be integrate with any application using iframe.
 
         pip install ipython
   
-- set the environment variables like hana DB credientials, DOX credentials.
+- Set the environment variables like hana DB credientials, DOX credentials. View sample_env.txt for format. Rename file as .env with your credentials
 
 - Run api locally by the following command
 

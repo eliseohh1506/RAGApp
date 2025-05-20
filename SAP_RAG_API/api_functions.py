@@ -3,6 +3,11 @@ import os
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import CharacterTextSplitter
 import tempfile
+from gen_ai_hub.orchestration.models.message import SystemMessage, UserMessage
+from gen_ai_hub.orchestration.models.template import Template, TemplateValue
+from gen_ai_hub.orchestration.models.config import OrchestrationConfig
+from gen_ai_hub.orchestration.models.document_grounding import (GroundingModule, DocumentGrounding, GroundingFilterSearch,
+                                                                DataRepositoryType, DocumentGroundingFilter)
 from langchain_core.prompts import PromptTemplate
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
@@ -20,6 +25,12 @@ import pytesseract
 
 load_dotenv()
 
+# Format documents to include source references in the context
+def format_documents_with_metadata(docs):
+    return "\n\n".join(
+        f"[Source: {doc.metadata.get('filename', 'Unknown')}, Page: {doc.metadata.get('page', 'Unknown')}]\n{doc.page_content}"
+        for doc in docs
+    )
 
 #function to get hanaDB connection
 def get_hana_db_conn():
@@ -112,55 +123,79 @@ def get_llm_chain(llm, db, file_name, invoiceDetails):
     You are a compliance assistant. Based on the extracted invoice fields and the policy document context, answer the user question.
 
     ### Extracted Invoice Fields:
-    {invoiceDetails}
+    {{?invoiceDetails}}
     
     ### Policy Document Context:
-    {context}
+    {{?grounding_response}}
 
     ### User Question:
-    {question}
+    {{?question}}
 
     Rules:
     - Answer question directly and concised
     - If no compliance check implied by user question, don't do compliance check
     - Be concise and explain which fields are compliant or non-compliant if asked to compare extracted fields against policy document.
-    - Include the **file name** and **page number** for each policy rule you refer to. If unknown, write 'Unknown'.
+    - Include the **title** and **page** for each policy rule you refer to. If unknown, write 'Unknown'.
     """
-    PROMPT = PromptTemplate(
-        template=prompt_template,
-        input_variables=["question", "invoiceDetails"]
+    template = Template(
+            messages=[
+                SystemMessage(prompt_template)
+            ]
+        )
+    # Set up Document Grounding
+    filters = [DocumentGroundingFilter(id="vector",
+                                    data_repositories=["*"],
+                                    search_config=GroundingFilterSearch(max_chunk_count=15),
+                                    data_repository_type=DataRepositoryType.VECTOR.value
+                                    )
+    ]
+
+    grounding_config = GroundingModule(
+                type="document_grounding_service",
+                config=DocumentGrounding(input_params=["question"], output_param="grounding_response", filters=filters, metadata_params=["title", "source", "page", "downloadUrl"])
+            )
+
+    config = OrchestrationConfig(
+        template=template,
+        llm=llm,
+        grounding=grounding_config
     )
 
-    # Use ConversationalRetrievalChain manually constructed
-    memory = ConversationBufferMemory(
-        memory_key="chat_history",
-        input_key="question",
-        output_key="answer",
-        return_messages=True
-    )
+    # PROMPT = PromptTemplate(
+    #     template=prompt_template,
+    #     input_variables=["question", "invoiceDetails"]
+    # )
 
-    retriever = db.as_retriever(
-        search_type="similarity_score_threshold",
-        search_kwargs={
-            "k": 5,
-            "score_threshold": 0.3,
-            "filter": {"source": {"$like": "%" + file_name + "%"}}
-        }
-    )
+    # # Use ConversationalRetrievalChain manually constructed
+    # memory = ConversationBufferMemory(
+    #     memory_key="chat_history",
+    #     input_key="question",
+    #     output_key="answer",
+    #     return_messages=True
+    # )
 
-    # Create the chain that integrates memory, retriever, and the prompt
-    qa_chain = ConversationalRetrievalChain.from_llm(
-        llm,
-        retriever,
-        memory=memory,
-        return_source_documents=True,
-        combine_docs_chain_kwargs={
-            "prompt": PROMPT,
-            "document_variable_name": "context"
-        }
-    )
+    # retriever = db.as_retriever(
+    #     search_type="similarity_score_threshold",
+    #     search_kwargs={
+    #         "k": 5,
+    #         "score_threshold": 0.3,
+    #         "filter": {"source": {"$like": "%" + file_name + "%"}}
+    #     }
+    # )
 
-    return qa_chain
+    # # Create the chain that integrates memory, retriever, and the prompt
+    # qa_chain = ConversationalRetrievalChain.from_llm(
+    #     llm,
+    #     retriever,
+    #     memory=memory,
+    #     return_source_documents=True,
+    #     combine_docs_chain_kwargs={
+    #         "prompt": PROMPT,
+    #         "document_variable_name": "context"
+    #     }
+    # )
+
+    return config
 
 #function to extract answer from string
 def extract_between_colon_and_period(input_string):

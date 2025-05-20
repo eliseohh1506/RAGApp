@@ -107,6 +107,24 @@ def get_sap_table(table_name, schema, conn):
     #     display(record_columns[i])
     return get_table_from_cursor(cursor)
 
+def getall_policy_doc():
+    accessToken = os.environ.get("AICORE_ACCESS_TOKEN")
+    baseUrl = os.environ.get("DOCUMENT_GROUND_URL")
+    api_url = f"{baseUrl}/vector/collections/{os.environ.get("DATA_REPO_ID")}/documents"
+    headers = {
+        "Accept": "application/json",
+        "AI-Resource-Group": "rag-test",
+        "Authorization": f"Bearer {accessToken}"
+    }
+    response = requests.get(
+            api_url,
+            headers=headers
+    )
+    if response.status_code == 200:
+            results = response.json().get("resources")
+            return results
+    else:
+        raise Exception(f"Failed to get DOX Documents: {response.status_code} - {response.text}")
 
 #function to get the answer from the response
 def get_source(response):
@@ -132,6 +150,38 @@ def delete_table(filter):
         filter = {"filter": filter}
         response = requests.post(api_url, filter)
     return response
+
+#function to connect to AICORE 
+def connect_aicore_api():
+    auth_url = os.environ.get("AICORE_AUTH_URL")
+    client_id = os.environ.get("AICORE_CLIENT_ID")
+    client_secret = os.environ.get("AICORE_CLIENT_SECRET")
+
+    if not all([auth_url, client_id, client_secret]):
+        raise ValueError("Missing required environment variables for AICORE API authentication.")
+
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+
+    params = {
+        "grant_type": "client_credentials",
+        "response_type": "token"
+    }
+
+    response = requests.post(
+        auth_url,
+        headers=headers,
+        params=params,
+        auth=HTTPBasicAuth(client_id, client_secret)
+    )
+
+    if response.status_code == 200:
+        access_token = response.json().get("access_token")
+        os.environ["AICORE_ACCESS_TOKEN"] = access_token
+        return access_token
+    else:
+        raise Exception(f"Failed to get access token: {response.status_code} - {response.text}")
 
 #function to connect to DoX API 
 def connect_dox_api():
@@ -216,6 +266,8 @@ def dox_get_fields(name):
         if response.status_code == 200:
             results = response.json().get("extraction")
             return results
+            # invoice_details_string = json.dumps([results])  # This converts the dict into a valid JSON string
+            # print(invoice_details_string)
         else:
             raise Exception(f"Failed to get DOX Documents: {response.status_code} - {response.text}")
         

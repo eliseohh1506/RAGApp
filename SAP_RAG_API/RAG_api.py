@@ -1,14 +1,16 @@
 from fastapi import FastAPI, File, UploadFile, Form
-from huggingface_hub import HfApi
 import os
 import api_functions as func
 from langchain_community.vectorstores.hanavector import HanaDB
-from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 # from langchain_huggingface import HuggingFaceEndpoint
 from langchain_community.chat_message_histories import ChatMessageHistory
 from gen_ai_hub.proxy.langchain.openai import ChatOpenAI
 # OpenAIEmbeddings to create text embeddings
 from gen_ai_hub.proxy.langchain.openai import OpenAIEmbeddings
+from gen_ai_hub.proxy import get_proxy_client
+from gen_ai_hub.orchestration.models.template import TemplateValue
+from gen_ai_hub.orchestration.models.llm import LLM
+from gen_ai_hub.orchestration.service import OrchestrationService
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,21 +18,24 @@ load_dotenv()
 #initiate fastapi as app
 app = FastAPI()
 
-#get HuggingFace token and login to HuggingFace
-HF_key = os.environ.get("HF_TOKEN")
-HFapi = HfApi(HF_key)
 os.environ["AICORE_AUTH_URL"] = os.environ.get("AICORE_AUTH_URL")
 os.environ["AICORE_CLIENT_ID"] = os.environ.get("AICORE_CLIENT_ID")
 os.environ["AICORE_CLIENT_SECRET"] = os.environ.get("AICORE_CLIENT_SECRET")
 os.environ["AICORE_BASE_URL"] = os.environ.get("AICORE_BASE_URL")
 os.environ["AICORE_RESOURCE_GROUP"]= os.environ.get("AICORE_RESOURCE_GROUP")
 
+#Set up orchestration service 
+aicore_client = get_proxy_client().ai_core_client
+orchestration_service = OrchestrationService(api_url=os.environ.get("ORCHESTRATION_URL"))
+llm = LLM(
+    name="gpt-4o",
+    parameters={
+        'temperature': 0.0,
+    }
+)
 #create hanaDB connection and embeddings
 conn = func.get_hana_db_conn()
 embeddings = OpenAIEmbeddings(deployment_id=os.environ.get("EMBEDDING_DEPLOYMENT_ID"))
-# embeddings = HuggingFaceInferenceAPIEmbeddings(
-#     api_key=HF_key, model_name="sentence-transformers/all-MiniLM-L6-v2"
-# )
 history = ChatMessageHistory()
 
 @app.get("/embedding-dim")
@@ -82,8 +87,6 @@ async def process_input(file: UploadFile = File(...)): #get file
 async def process_input(query: str = Form(...), file_name: str = Form("Temp"), invoiceDetails: str = Form({})): #get query and file name
 
     id = os.environ.get("LLM_DEPLOYMENT_ID")
-    #create llm 
-    llm = ChatOpenAI(deployment_id=id)
 
     #create vector connection
     db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
@@ -91,14 +94,19 @@ async def process_input(query: str = Form(...), file_name: str = Form("Temp"), i
     #create QA chain
     qa_chain = func.get_llm_chain(llm, db, file_name, invoiceDetails)
 
-    question_with_invoice = {
-        "question": query,
-        "invoiceDetails": invoiceDetails
-    }
-    #get answer
-    result = qa_chain.invoke(question_with_invoice)
+    # question_with_invoice = {
+    #     "question": query,
+    #     "invoiceDetails": invoiceDetails
+    # }
+    # #get answer
+    # result = qa_chain.invoke(question_with_invoice)
+    response = orchestration_service.run(config=qa_chain,
+                            template_values=[
+                                TemplateValue("question", query),
+                                TemplateValue("invoiceDetails", invoiceDetails)
+                            ])
 
-    return result
+    return response.orchestration_result.choices[0].message.content
 
 
 #endpoint to clear data

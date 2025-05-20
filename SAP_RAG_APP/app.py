@@ -18,26 +18,25 @@ def init_chat():
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     response = func.call_chat_api(prompt, st.session_state.policy_doc, st.session_state.invoice)
-    ans = func.get_source(response)
     #write and save assistant response
     with st.chat_message("assistant"):
-        st.write(response['answer'])
-    st.session_state.messages.append({"role": "assistant", "content": response['answer']})
+        st.write(response)
+    st.session_state.messages.append({"role": "assistant", "content": response})
 
 
 #function to get list of uploaded docs from db
 @st.experimental_fragment
 def get_uploaded_docs():
-    conn = func.get_hana_db_conn()
-    df = func.get_sap_table('MAV_SAP_RAG', 'DBADMIN', conn)
-    if df.shape[0] != 0:
-        doc_list = [eval(d).get("source") for d in df['VEC_META']]
-        # print("doclist: ", doc_list)
-        df['file_name'] = [os.path.basename(path) for path in doc_list]
-        doc_list = df['file_name'].unique()
-        return doc_list
-    else: 
-        return []
+    func.connect_aicore_api()
+    res = func.getall_policy_doc()
+    extracted_data = []
+    for doc in res:
+        metadata = doc.get("metadata", [])
+        title = next((item["value"][0] for item in metadata if item["key"] == "title"), None)
+        download_url = next((item["value"][0] for item in metadata if item["key"] == "downloadUrl"), None)
+        extracted_data.append({"title": title, "downloadUrl": download_url})
+
+    return extracted_data
 
 @st.experimental_fragment
 def get_dox_documents():
@@ -181,27 +180,57 @@ if chat_mode == "File Upload":
 # if chat with pre-uploaded docs
 elif chat_mode == "Chat with Pre-Uploaded Data":
     doc_list = get_uploaded_docs() #get list of uploaded docs from db
+    doc_titles = [doc['title'] for doc in doc_list]
     invoice_list = get_dox_documents()
-    policy_doc = st.sidebar.selectbox("Select Policy Document", doc_list)
-    st.sidebar.button("Download policy document")
+    # Sidebar dropdown shows only titles
+    selected_title = st.sidebar.selectbox("Select Policy Document", doc_titles)
+
+    # Find the selected document object from doc_list
+    policy_doc = next(doc for doc in doc_list if doc['title'] == selected_title)
+
+
+    st.sidebar.markdown(
+            f"""
+            <a href="{policy_doc['downloadUrl']}" target="_blank">
+                <button style="background-color:#FFFFFF;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:pointer;margin-bottom: 20px">
+                    See Policy Documents
+                </button>
+            </a>
+            """,
+            unsafe_allow_html=True
+        )
+
+
     st.session_state.policy_doc = policy_doc
     # all_invoice = st.sidebar.toggle("All Documents", ) #check if chat with all docs or a selected doc
     # if not all docs then select doc from sidebar
-    invoice = st.sidebar.selectbox("Select Document to check for compliance", invoice_list)
-    st.session_state.invoiceId = func.dox_getId(invoice)
-    st.session_state.invoice = func.dox_get_fields(invoice)
-    url = f"{os.environ.get('DOX_UI_URL')}clientId={os.environ.get('DOX_CLIENT_NAME')}#/invoiceviewer&/iv/detailDetail/{st.session_state.invoiceId}/TwoColumnsBeginExpanded"
+    if invoice_list:  # only show invoice-related UI if list is not empty
+        invoice = st.sidebar.selectbox("Select Document to check for compliance", invoice_list)
+        st.session_state.invoiceId = func.dox_getId(invoice)
+        st.session_state.invoice = func.dox_get_fields(invoice)
 
-    st.sidebar.markdown(
-        f"""
-        <a href="{url}" target="_blank">
-            <button style="background-color:#FFFFFF;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:pointer;margin-bottom: 20px">
+        url = f"{os.environ.get('DOX_UI_URL')}clientId={os.environ.get('DOX_CLIENT_NAME')}#/invoiceviewer&/iv/detailDetail/{st.session_state.invoiceId}/TwoColumnsBeginExpanded"
+
+        st.sidebar.markdown(
+            f"""
+            <a href="{url}" target="_blank">
+                <button style="background-color:#FFFFFF;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:pointer;margin-bottom: 20px">
+                    📄 Check Invoice Extracted Fields
+                </button>
+            </a>
+            """,
+            unsafe_allow_html=True
+        )
+    else:
+        st.sidebar.selectbox("Select Document to check for compliance", ["No documents available"], disabled=True)
+        st.sidebar.markdown(
+            """
+            <button style="background-color:#CCCCCC;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:not-allowed;margin-bottom: 20px" disabled>
                 📄 Check Invoice Extracted Fields
             </button>
-        </a>
-        """,
-        unsafe_allow_html=True
-    )
+            """,
+            unsafe_allow_html=True
+        )
     #load chat history from local history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):

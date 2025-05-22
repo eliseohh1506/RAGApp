@@ -5,7 +5,6 @@ import pandas as pd
 import json
 import os
 import mimetypes
-from IPython.display import display
 from dotenv import load_dotenv
 load_dotenv()
 #function to get the file content
@@ -106,25 +105,6 @@ def get_sap_table(table_name, schema, conn):
     # for i in range(len(record_columns)):
     #     display(record_columns[i])
     return get_table_from_cursor(cursor)
-
-def getall_policy_doc():
-    accessToken = os.environ.get("AICORE_ACCESS_TOKEN")
-    baseUrl = os.environ.get("DOCUMENT_GROUND_URL")
-    api_url = f"{baseUrl}/vector/collections/{os.environ.get("DATA_REPO_ID")}/documents"
-    headers = {
-        "Accept": "application/json",
-        "AI-Resource-Group": "rag-test",
-        "Authorization": f"Bearer {accessToken}"
-    }
-    response = requests.get(
-            api_url,
-            headers=headers
-    )
-    if response.status_code == 200:
-            results = response.json().get("resources")
-            return results
-    else:
-        raise Exception(f"Failed to get DOX Documents: {response.status_code} - {response.text}")
 
 #function to get the answer from the response
 def get_source(response):

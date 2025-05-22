@@ -142,7 +142,7 @@ chat_mode = st.sidebar.selectbox("How do you want to start the chat?", ( "Chat w
 if chat_mode == "File Upload":
 
     #upload fileof type csv, txt, pdf
-    fileContract = st.sidebar.file_uploader("Upload a Contract/Policy file", type=["csv", "txt", "pdf"])
+    fileContract = st.sidebar.file_uploader("Upload a Contract/Policy file", type=[ "pdf"])
     fileInvoice = st.sidebar.file_uploader("Upload an Invoice for Compliance Check", type=["jpeg", "png", "pdf"])
     dox_doc_type = st.sidebar.selectbox("Select Document Type", (get_dox_document_type()))
     dox_schema = st.sidebar.selectbox("Select Schema", (get_dox_schema(dox_doc_type)))

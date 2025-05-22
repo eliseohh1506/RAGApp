@@ -8,9 +8,6 @@ from gen_ai_hub.proxy.langchain.openai import ChatOpenAI
 # OpenAIEmbeddings to create text embeddings
 from gen_ai_hub.proxy.langchain.openai import OpenAIEmbeddings
 from gen_ai_hub.proxy import get_proxy_client
-from gen_ai_hub.orchestration.models.template import TemplateValue
-from gen_ai_hub.orchestration.models.llm import LLM
-from gen_ai_hub.orchestration.service import OrchestrationService
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,23 +23,10 @@ os.environ["AICORE_RESOURCE_GROUP"]= os.environ.get("AICORE_RESOURCE_GROUP")
 
 #Set up orchestration service 
 aicore_client = get_proxy_client().ai_core_client
-orchestration_service = OrchestrationService(api_url=os.environ.get("ORCHESTRATION_URL"))
 #create hanaDB connection and embeddings
 conn = func.get_hana_db_conn()
 embeddings = OpenAIEmbeddings(deployment_id=os.environ.get("EMBEDDING_DEPLOYMENT_ID"))
 history = ChatMessageHistory()
-
-@app.get("/embedding-dim")
-async def check_embedding_dim():
-    test_sentence = "This is a test sentence."
-    vectors = embeddings.embed_documents([test_sentence])
-    
-    if not vectors:
-        return {"error": "No embeddings returned"}
-    
-    vector_length = len(vectors[0])
-    return {"embedding_dimension": vector_length}
-
 
 #endpoint to process uploaded file
 @app.post("/upload")
@@ -58,10 +42,6 @@ async def process_input(file: UploadFile = File(...)): #get file
 
     if file_extension == ".pdf":
         texts = func.get_text_from_pdf(file_path)
-    elif file_extension == ".txt":
-        texts = func.get_text_from_txt(file_path)
-    elif file_extension == ".csv":
-        texts = func.get_text_from_csv(file_path)
     else:
         return {"status": "File type not supported"}
 
@@ -113,5 +93,3 @@ async def clear_data(filter: str = Form("None")): # get filter file name
         db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
         db.delete(filter={"source":{"$like": "%"+filter+"%"}})
         return {"status": "Success"}
-
- 

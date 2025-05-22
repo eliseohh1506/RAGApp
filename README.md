@@ -3,6 +3,7 @@
 This is a chat application used to cross check documents against policy to see if documents are compliant 
 It uses:
 - SAP HANA vector store to store vectors
+- S3 Object Store to store documents
 - SAP DoX API to upload invoices, retrieve extracted fields
 - Embeddings and Chat LLM are both deployed on SAP AI Launchpad
 - FastAPI for api, Langchain for DevOps and AI chain
@@ -88,6 +89,8 @@ It can be integrate with any application using iframe.
         pip install --require-virtualenv hdbcli
 
         pip install ipython
+
+        pip install langgraph
   
 - Set the environment variables like hana DB credientials, DOX credentials. View sample_env.txt for format. Rename file as .env with your credentials
 
@@ -100,7 +103,3 @@ It can be integrate with any application using iframe.
     * To run the main app which contains options to upload docs, chat with selected docs, delete docs.
 
                 streamlit run app.py 
-
-    * To run simple app only used to chat, which can be used to integrate with websites using iframe.
-
-                streamlit run iapp.py

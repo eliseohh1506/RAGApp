@@ -16,6 +16,10 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.docstore.document import Document
 from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain import hub
+from langchain_core.documents import Document
+from langgraph.graph import START, StateGraph
+from typing_extensions import List, TypedDict
 import re
 from dotenv import load_dotenv
 from langchain.schema import Document
@@ -68,7 +72,10 @@ def get_text_from_pdf(file_path):
                 text = pytesseract.image_to_string(image)
 
             # Create a document with metadata
-            doc = Document(page_content=text, metadata={"page": i + 1, "source": file_path, "filename": os.path.basename(file_path)})
+            doc = Document(id=os.path.basename(file_path), 
+                           page_content=text, 
+                           metadata={"page": i + 1, 
+                                     "title": os.path.basename(file_path)})
 
             # Chunk this single page-document while preserving metadata
             chunks = text_splitter.split_documents([doc])
@@ -123,79 +130,79 @@ def get_llm_chain(llm, db, file_name, invoiceDetails):
     You are a compliance assistant. Based on the extracted invoice fields and the policy document context, answer the user question.
 
     ### Extracted Invoice Fields:
-    {{?invoiceDetails}}
+    {invoiceDetails}
     
     ### Policy Document Context:
-    {{?grounding_response}}
+    {context}
 
     ### User Question:
-    {{?question}}
+    {question}
 
     Rules:
     - Answer question directly and concised
     - If no compliance check implied by user question, don't do compliance check
     - Be concise and explain which fields are compliant or non-compliant if asked to compare extracted fields against policy document.
-    - Include the **title** and **page** for each policy rule you refer to. If unknown, write 'Unknown'.
+    - Include the **page** for each policy rule you refer to. 
+    - Page can be derived from metadata of the page_content where policy is found. If unknown, write 'Unknown'.
     """
-    template = Template(
-            messages=[
-                SystemMessage(prompt_template)
-            ]
-        )
-    # Set up Document Grounding
-    filters = [DocumentGroundingFilter(id="vector",
-                                    data_repositories=["*"],
-                                    search_config=GroundingFilterSearch(max_chunk_count=15),
-                                    data_repository_type=DataRepositoryType.VECTOR.value
-                                    )
-    ]
-
-    grounding_config = GroundingModule(
-                type="document_grounding_service",
-                config=DocumentGrounding(input_params=["question"], output_param="grounding_response", filters=filters, metadata_params=["title", "source", "page", "downloadUrl"])
-            )
-
-    config = OrchestrationConfig(
-        template=template,
-        llm=llm,
-        grounding=grounding_config
+    retriever = db.as_retriever(
+        search_type="similarity_score_threshold",
+        search_kwargs={
+            "k": 5,
+            "score_threshold": 0.3,
+            "filter": {"title": {"$like": "%" + file_name + "%"}}
+        }
     )
 
-    # PROMPT = PromptTemplate(
-    #     template=prompt_template,
-    #     input_variables=["question", "invoiceDetails"]
-    # )
+    class ChatState(TypedDict):
+        question: str
+        context: List[Document]
+        answer: str
+        chat_history: List
+        invoiceDetails: str
 
-    # # Use ConversationalRetrievalChain manually constructed
-    # memory = ConversationBufferMemory(
-    #     memory_key="chat_history",
-    #     input_key="question",
-    #     output_key="answer",
-    #     return_messages=True
-    # )
+    # Retrieval step
+    def retrieve(state: ChatState):
+        question = state["question"]
+        docs = retriever.get_relevant_documents(question)
+        if not docs:
+            docs = db.similarity_search("", 100, 
+                                        filter={"title": {"$like": "%" + file_name + "%"}})
+        return {"context": docs}
+    
+    # Generation step with memory
+    def generate(state: ChatState):
+        question = state["question"]
+        context = "\n\n".join(
+            f"(Page {doc.metadata.get('page', 'Unknown')})\n{doc.page_content}"
+            for doc in state["context"]
+        )
+        invoice_details = state.get("invoiceDetails", "")
 
-    # retriever = db.as_retriever(
-    #     search_type="similarity_score_threshold",
-    #     search_kwargs={
-    #         "k": 5,
-    #         "score_threshold": 0.3,
-    #         "filter": {"source": {"$like": "%" + file_name + "%"}}
-    #     }
-    # )
+        chat_history = state.get("chat_history", [])
+        prompt = prompt_template.format(
+            question=question,
+            invoiceDetails=invoice_details,
+            context=context
+        )
 
-    # # Create the chain that integrates memory, retriever, and the prompt
-    # qa_chain = ConversationalRetrievalChain.from_llm(
-    #     llm,
-    #     retriever,
-    #     memory=memory,
-    #     return_source_documents=True,
-    #     combine_docs_chain_kwargs={
-    #         "prompt": PROMPT,
-    #         "document_variable_name": "context"
-    #     }
-    # )
+        response = llm.invoke(prompt)
 
-    return config
+        # chat_history.append(HumanMessage(content=question))
+        # chat_history.append(AIMessage(content=response.content))
+
+        return {
+            "answer": response.content,
+            "chat_history": chat_history
+        }
+
+    # Build the LangGraph
+    graph_builder = StateGraph(ChatState).add_sequence([retrieve, generate])
+    graph_builder.add_edge(START, "retrieve")
+    graph_builder.add_edge("retrieve", "generate")
+    graph = graph_builder.compile()
+
+    return graph
 
 #function to extract answer from string
 def extract_between_colon_and_period(input_string):

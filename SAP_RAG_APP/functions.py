@@ -266,8 +266,6 @@ def dox_get_fields(name):
         if response.status_code == 200:
             results = response.json().get("extraction")
             return results
-            # invoice_details_string = json.dumps([results])  # This converts the dict into a valid JSON string
-            # print(invoice_details_string)
         else:
             raise Exception(f"Failed to get DOX Documents: {response.status_code} - {response.text}")
         

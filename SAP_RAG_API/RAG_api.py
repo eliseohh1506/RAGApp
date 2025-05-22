@@ -27,12 +27,6 @@ os.environ["AICORE_RESOURCE_GROUP"]= os.environ.get("AICORE_RESOURCE_GROUP")
 #Set up orchestration service 
 aicore_client = get_proxy_client().ai_core_client
 orchestration_service = OrchestrationService(api_url=os.environ.get("ORCHESTRATION_URL"))
-llm = LLM(
-    name="gpt-4o",
-    parameters={
-        'temperature': 0.0,
-    }
-)
 #create hanaDB connection and embeddings
 conn = func.get_hana_db_conn()
 embeddings = OpenAIEmbeddings(deployment_id=os.environ.get("EMBEDDING_DEPLOYMENT_ID"))
@@ -59,7 +53,6 @@ async def process_input(file: UploadFile = File(...)): #get file
     file_extension = os.path.splitext(file_path)[1]
     #create vector connection
     db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
-    error = 0
     #find format of file, process it accourding to it and store it as vectors in hanaDB
     texts = []
 
@@ -87,6 +80,7 @@ async def process_input(file: UploadFile = File(...)): #get file
 async def process_input(query: str = Form(...), file_name: str = Form("Temp"), invoiceDetails: str = Form({})): #get query and file name
 
     id = os.environ.get("LLM_DEPLOYMENT_ID")
+    llm = ChatOpenAI(deployment_id=id)
 
     #create vector connection
     db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
@@ -94,19 +88,14 @@ async def process_input(query: str = Form(...), file_name: str = Form("Temp"), i
     #create QA chain
     qa_chain = func.get_llm_chain(llm, db, file_name, invoiceDetails)
 
-    # question_with_invoice = {
-    #     "question": query,
-    #     "invoiceDetails": invoiceDetails
-    # }
-    # #get answer
-    # result = qa_chain.invoke(question_with_invoice)
-    response = orchestration_service.run(config=qa_chain,
-                            template_values=[
-                                TemplateValue("question", query),
-                                TemplateValue("invoiceDetails", invoiceDetails)
-                            ])
-
-    return response.orchestration_result.choices[0].message.content
+    question_with_invoice = {
+        "question": query,
+        "chat_history": history,
+        "invoiceDetails": invoiceDetails
+    }
+    #get answer
+    result = qa_chain.invoke(question_with_invoice)
+    return result
 
 
 #endpoint to clear data

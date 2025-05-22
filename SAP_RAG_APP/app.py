@@ -1,8 +1,16 @@
 import streamlit as st 
 import functions as func
 import os
+import boto3
+from botocore.exceptions import NoCredentialsError, ClientError
 from dotenv import load_dotenv
 load_dotenv()
+
+os.environ["AWS_ACCESS_KEY_ID"] = os.environ.get("AWS_ACCESS_KEY_ID")
+os.environ["AWS_SECRET_ACCESS_KEY"] = os.environ.get("AWS_SECRET_ACCESS_KEY")
+os.environ["AWS_DEFAULT_REGION"] = os.environ.get("AWS_DEFAULT_REGION")
+bucket_name = os.environ.get("AWS_BUCKET_NAME")
+s3 = boto3.client("s3")
 
 #function to clear the local chat history
 @st.experimental_fragment
@@ -20,23 +28,25 @@ def init_chat():
     response = func.call_chat_api(prompt, st.session_state.policy_doc, st.session_state.invoice)
     #write and save assistant response
     with st.chat_message("assistant"):
-        st.write(response)
-    st.session_state.messages.append({"role": "assistant", "content": response})
+        # st.write("**Context Used for Answering:**")
+        # st.markdown(response["context"])
+        # Display the final answer
+        st.write("**Answer:**")
+        st.markdown(response["answer"])
+    st.session_state.messages.append({"role": "assistant", "content": response["answer"]})
 
 
-#function to get list of uploaded docs from db
+#function to get list of uploaded docs from AWS S3 bucket 
 @st.experimental_fragment
 def get_uploaded_docs():
-    func.connect_aicore_api()
-    res = func.getall_policy_doc()
-    extracted_data = []
-    for doc in res:
-        metadata = doc.get("metadata", [])
-        title = next((item["value"][0] for item in metadata if item["key"] == "title"), None)
-        download_url = next((item["value"][0] for item in metadata if item["key"] == "downloadUrl"), None)
-        extracted_data.append({"title": title, "downloadUrl": download_url})
+    bucket_name = os.environ.get("AWS_BUCKET_NAME")
+    response = s3.list_objects(Bucket=bucket_name)
 
-    return extracted_data
+    # Safely get list of objects or empty list if none exist
+    contents = response.get('Contents', [])
+    extracted_titles = [doc['Key'] for doc in contents]
+
+    return extracted_titles
 
 @st.experimental_fragment
 def get_dox_documents():
@@ -68,6 +78,17 @@ def get_dox_schema(document_type):
     ]
     return sorted(matching_schemas)
 
+@st.experimental_fragment
+def generate_presigned_url(object_key, expiration=3600):
+    return s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket_name, "Key": object_key},
+        ExpiresIn=expiration
+    )
+
+@st.experimental_fragment
+def dox_url(invoiceId):
+    return f"{os.environ.get('DOX_UI_URL')}clientId={os.environ.get('DOX_CLIENT_NAME')}#/invoiceviewer&/iv/detailDetail/{invoiceId}/TwoColumnsBeginExpanded"
 
 #fuction to clear data of selected or all docs from hana DB
 @st.experimental_dialog("Are you sure?")
@@ -79,6 +100,9 @@ def clear_data_db(file = None):
             if file == None:
                 mess = func.delete_table(None)
             else:
+                s3.delete_objects(Bucket=bucket_name, Delete={"Objects":[
+                    {'Key': file}
+                ]})
                 mess = func.delete_table(file)
             st.rerun()
             return mess
@@ -98,8 +122,6 @@ if "policy_doc" not in st.session_state:
     st.session_state.policy_doc = ""
 if "invoice" not in st.session_state:
     st.session_state.invoice = {}
-if "invoiceId" not in st.session_state:
-    st.session_state.invoiceId = ""
 
  
 
@@ -162,17 +184,39 @@ if chat_mode == "File Upload":
 
     # if file is already exist in db then show message, if not then call the funciton to upload the file into db by vectorize it.
     if fileContract is not None:
-
         if fileContract.name not in doc_list:
-            api_output = func.call_file_api(fileContract)
-            st.sidebar.write(api_output["status"])
-            st.session_state.file_name = api_output["file_name"]
-            if api_output["status"] == "Success":
-                for message in st.session_state.messages:
-                    with st.chat_message(message["role"]):
-                        st.markdown(message["content"])
-                if prompt := st.chat_input("Come on lets Chat!"):
-                    init_chat()
+            #Upload to both S3 and Hana vector store
+            bucket_name=os.environ.get("AWS_BUCKET_NAME")
+            try:
+                api_output = func.call_file_api(fileContract)
+                fileContract.seek(0)
+                st.sidebar.write(api_output["status"])
+                s3.upload_fileobj(fileContract, bucket_name, fileContract.name)
+                #Update metadata after upload
+                s3.copy_object(
+                    Bucket=bucket_name,
+                    CopySource={'Bucket': bucket_name, 'Key': fileContract.name},
+                    Key=fileContract.name,
+                    MetadataDirective='REPLACE',
+                    ContentDisposition='inline',
+                    ContentType='application/pdf'
+                )
+                st.session_state.file_name = api_output["file_name"]
+                if api_output["status"] == "Success":
+                    for message in st.session_state.messages:
+                        with st.chat_message(message["role"]):
+                            st.markdown(message["content"])
+                    if prompt := st.chat_input("Come on lets Chat!"):
+                        init_chat()
+            except FileNotFoundError:
+                st.sidebar.write(f"Error: File '{fileContract.name}' not found.")
+            except NoCredentialsError:
+                st.sidebar.write("Error: No AWS credentials found.")
+            except ClientError as e:
+                error_code = e.response['Error']['Code']
+                st.sidebar.write(f"Error: {error_code} - {e}")
+            except Exception as e:
+                st.sidebar.write(f"An unexpected error occurred: {e}")
         else:
             if fileContract.name in doc_list:
                 st.sidebar.write("File Name already Exist")
@@ -180,42 +224,44 @@ if chat_mode == "File Upload":
 # if chat with pre-uploaded docs
 elif chat_mode == "Chat with Pre-Uploaded Data":
     doc_list = get_uploaded_docs() #get list of uploaded docs from db
-    doc_titles = [doc['title'] for doc in doc_list]
     invoice_list = get_dox_documents()
     # Sidebar dropdown shows only titles
-    selected_title = st.sidebar.selectbox("Select Policy Document", doc_titles)
+    if not doc_list:
+        doc_list = ["No documents available"]
+    policy_doc = st.sidebar.selectbox("Select Policy Document", doc_list)
 
-    # Find the selected document object from doc_list
-    policy_doc = next(doc for doc in doc_list if doc['title'] == selected_title)
-
-
-    st.sidebar.markdown(
+    if policy_doc != "No documents available":
+        doc_url = generate_presigned_url(policy_doc)
+        st.sidebar.markdown(
             f"""
-            <a href="{policy_doc['downloadUrl']}" target="_blank">
+            <a href="{doc_url}" target="_blank">
                 <button style="background-color:#FFFFFF;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:pointer;margin-bottom: 20px">
-                    See Policy Documents
+                    See Policy Document
                 </button>
             </a>
             """,
             unsafe_allow_html=True
         )
+        if clear_data := st.sidebar.button("Clear Policy Documents from DB", key="clear_data"):
+            clear_data_db(policy_doc)
+    else:
+        st.sidebar.info("Please upload a policy document to begin.")
 
 
     st.session_state.policy_doc = policy_doc
-    # all_invoice = st.sidebar.toggle("All Documents", ) #check if chat with all docs or a selected doc
     # if not all docs then select doc from sidebar
     if invoice_list:  # only show invoice-related UI if list is not empty
         invoice = st.sidebar.selectbox("Select Document to check for compliance", invoice_list)
-        st.session_state.invoiceId = func.dox_getId(invoice)
+        invoiceId = func.dox_getId(invoice)
         st.session_state.invoice = func.dox_get_fields(invoice)
 
-        url = f"{os.environ.get('DOX_UI_URL')}clientId={os.environ.get('DOX_CLIENT_NAME')}#/invoiceviewer&/iv/detailDetail/{st.session_state.invoiceId}/TwoColumnsBeginExpanded"
+        url = dox_url(invoiceId)
 
         st.sidebar.markdown(
             f"""
             <a href="{url}" target="_blank">
                 <button style="background-color:#FFFFFF;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:pointer;margin-bottom: 20px">
-                    📄 Check Invoice Extracted Fields
+                    Check Invoice Extracted Fields
                 </button>
             </a>
             """,
@@ -241,11 +287,3 @@ elif chat_mode == "Chat with Pre-Uploaded Data":
     if prompt := st.chat_input("Come on lets Chat!"):
         init_chat()
         print(st.session_state.messages)
-
-
-    #clear data from db based on selection by clicking button
-    if clear_data := st.sidebar.button("Clear Policy Documents from DB", key="clear_data"):
-        clear_data_db(policy_doc)
-    
-
-

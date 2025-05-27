@@ -32,13 +32,17 @@ It contains the libraries required to run the
 
 ### Architecture:
 
-![Architecture](Screenshots/Architecture.PNG "Architecture of the APP")
+![Architecture](Screenshots/RAG-Architecture.drawio.png "Architecture of the APP")
 
-- To upload a document to the HANA DB, run app.py > select upload docs from dropdown in sidebar > browse and upload document > chat once "success" message appeared. Upload api is called from app.py where the api gets the file, categorize it, extract pages, convert into vector using embedding llm, and load it into the HANA DB.
+- To upload a policy document to the HANA DB, run app.py > select upload docs from dropdown in sidebar named "Upload a Contract/Policy file" > browse and upload document > switch to "chat with pre-uploaded docs" once "success" message appeared. Upload api is called from app.py where the api gets the file, categorize it, extract pages, convert into vector using embedding llm, and load it into the HANA DB.
 
-- To chat with pre-uploaded documents, select "chat with pre-uploaded docs" from same drop down mentioned above > select "all docs" toggle to chat with all docs in the DB else select a particualr document from select document dropdown. The chat api is called by giving query and file name as input and get answer, chat-history, extraced - documents.
+- To view policy document, run app.py > switch to "chat with pre-uploaded docs" > Select policy document from dropdown in sidebar > Click on "See Policy Document" button. The policy document should pop up in a new tab as a PDF document. The button embeds a presigned url generated from AWS S3 API
 
-- To delete docs from DB, do all the steps in the above steps. After it click on clear data button to delete selected or all docs from DB.
+- To upload a document for cross-checking against policy document, run app.py > select upload docs from dropdown in sidebar named "Upload an Invoice for Compliance Check" > browse and upload document > switch to "chat with pre-uploaded docs" once "File is being proccessed" message appeared. Uploading document for cross checking accesses the BTP DoX API and uploads it to a predefined client in the environment.
+
+- To view policy document, run app.py > switch to "chat with pre-uploaded docs" > Select Select Document to check for compliance from dropdown in sidebar > Click on "CHeck Invoice extracted fields" button. This should direct you to Dox UI page where you can check if extracted fields is correct and delete uploaded invoices
+  
+- To delete policy docs from DB, do all the steps in the above steps. After it click on clear policy documents from DB button to delete selected docs from DB. This will delete its instance and vectors from S3 and Hana Vector Store respectively
 
 ### Application Overview:
 

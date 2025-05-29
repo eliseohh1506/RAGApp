@@ -15,12 +15,6 @@ load_dotenv()
 #initiate fastapi as app
 app = FastAPI()
 
-os.environ["AICORE_AUTH_URL"] = os.environ.get("AICORE_AUTH_URL")
-os.environ["AICORE_CLIENT_ID"] = os.environ.get("AICORE_CLIENT_ID")
-os.environ["AICORE_CLIENT_SECRET"] = os.environ.get("AICORE_CLIENT_SECRET")
-os.environ["AICORE_BASE_URL"] = os.environ.get("AICORE_BASE_URL")
-os.environ["AICORE_RESOURCE_GROUP"]= os.environ.get("AICORE_RESOURCE_GROUP")
-
 #Set up orchestration service 
 aicore_client = get_proxy_client().ai_core_client
 #create hanaDB connection and embeddings

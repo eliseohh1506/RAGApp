@@ -80,7 +80,7 @@ It contains the libraries required to run the
 
 - Create a new folder and nagagitate to it in command prompt (windows).
 
-- Ensure Python version is 3.12.3
+- Ensure Python version is 3.12
 
 - Clone this repository using
     

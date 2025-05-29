@@ -1,0 +1,17 @@
+langchain_community
+langchain_text_splitters
+langchain_core
+langchain
+generative-ai-hub-sdk[all]
+boto3
+langgraph
+ipython
+pytesseract
+fastapi
+hdbcli
+dotenv
+pandas
+aioboto3
+python-multipart
+pdfplumber
+uvicorn

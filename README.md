@@ -5,21 +5,33 @@ It uses:
 - SAP HANA vector store to store vectors
 - S3 Object Store to store documents
 - SAP DoX API to upload invoices, retrieve extracted fields
-- Embeddings and Chat LLM are both deployed on SAP AI Launchpad
+- SAP AI Launchpad LLM models for embeddings and chat
 - FastAPI for api, Langchain for DevOps and AI chain
 - Streamlit for application.
+
+This application is modified from https://github.com/KARTHIKEYAN-31/SAP-RAG-ChatBot/tree/main, huge thank you for this well built project! 
+
+### Pre-requisite:
+Have instance and service key of:
+- HANA Vector store 
+- S3 Object Store 
+- SAP DoX Service 
+- SAP AI Core 
+
+You must also make sure:
+- LLMs used for embeddings and Chat are deployed on SAP AI Launchpad
+- Python version in 3.12
 
 ### Structure of Repository:
 
 SAP_RAG_APP:
 
-- app.py - The main application where a document can be upload, delete or chat with it.
-- iapp.py - is a simple chat interface used to chat with all the documents which are uploaded using app.py.
+- app.py - The main application where a document can be uploaded, source document can be viewed, deleted or users can chat with it.
 -functions.py - is a extension for both the above mentioned file. Which contains functions, which are called from other files.
 
 SAP_RAG_DOCUMENT_CHATBOT:
 
-- RAG_api.py - It is the main api created using FastAPI, i has the options to load, chat and delete documents from vector DB.
+- RAG_api.py - It is the main api created using FastAPI, it has the options to load, chat and delete documents from vector DB.
 
 - api_functions - It contains all the functions to create a RAG chain and chat with it and other function used by api file.
 
@@ -28,7 +40,7 @@ Screenshots:
 It contains the screenshot of app and how to call it.
 
 requirements.txt:
-It contains the libraries required to run the
+It contains the libraries required to run the 
 
 ### Architecture:
 
@@ -48,29 +60,21 @@ It contains the libraries required to run the
 
 #### **app.py** 
 
-- To convert the file into vectors and upload it into the SAP HANA Vector DB, select File upload in Dropdown > upload document using Browse File. Once the document uploaded "Success" message appears and chat option is enabled.
+- To convert the policy file into vectors and upload it into the SAP HANA Vector DB, select File upload in Dropdown > upload document under "Upload a Contract/Policy file" using Browse File. Once the document uploaded "Success" message appears and chat option is enabled.
 
-![app.py - upload Data](Screenshots/detailed_app_upload_data.PNG "app.py - upload Data")
+- To upload an document for checks into DoX UI, Browse File in "Upload an Invoice for Compliance Check". Once document uploaded "File is being processed" message appears. 
 
-- Select "Chat with Pre-Uploaded Data" from dropdown to chat withe the docs already uploaded into the DB. By default a "all document" toggle is dis selected to chat with a particular docs.
+![app.py - upload Data](Screenshots/app_upload_interface.png "app.py - upload Data")
 
-![app.py - Pre_uploaded Data - select Docs](Screenshots/detailed_app_preuploaded_doc_select_doc.PNG "app.py - Pre_uploaded Data - select Docs")
+- Select "Chat with Pre-Uploaded Data" from dropdown to chat withe the docs already uploaded into the DB. 
 
-- To chat with all docs without selecting a particular data, select "all document" toggle.
+- "See Policy Document" button will display source policy document in a pop up as PDF 
 
-![app.py - Pre_uploaded Data - select Docs](Screenshots/detailed_app_preuploaded_doc_all_doc.PNG "app.py - Pre_uploaded Data - select Docs")
+- "Clear Policy Documents from DB" will remove policy document from AWS S3 Object Store as well as its vector embeddings in HANA Vector Store 
 
-#### iapp.py
+- "Check Invoice Extracted Fields" will display document for policy check in DoX UI as a pop up, users will be able to edit extracted fields and delete the document through this UI. 
 
-This is a simple chat UI to chat with all the docs in the hana DB. 
-
-![iapp.py - simple chat](Screenshots/iapp_ss.PNG "iapp.py - simple chat")
-
-It can be integrate with any application using iframe.
-
-![chat widget](Screenshots/Chatbot_html2_ss.PNG "chat widget")
-
-![chat widget](Screenshots/Chatbot_html_ss.PNG "chat widget")
+![app.py - Pre_uploaded Data - select Docs](Screenshots/chat_with_preuploaded_doc.png "app.py - Pre_uploaded Data - select Docs")
 
 ### Clone and try it:
 
@@ -82,19 +86,15 @@ It can be integrate with any application using iframe.
     
         git clone https://github.com/eliseohh1506/RAGApp.git
 
+- cd into SAP_RAG_API folder
+
 - Create virtual environment 
 
-- Install required libraries
+- Install required libraries 
     
         pip install -r requirements.txt
 
-        pip install --require-virtualenv generative-ai-hub-sdk[all]
-
-        pip install --require-virtualenv hdbcli
-
-        pip install ipython
-
-        pip install langgraph
+- Repeat above 3 steps for SAP_RAG_APP folder
   
 - Set the environment variables like hana DB credientials, DOX credentials. View sample_env.txt for format. Rename file as .env with your credentials
 

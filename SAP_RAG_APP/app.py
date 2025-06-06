@@ -123,9 +123,6 @@ if "policy_doc" not in st.session_state:
 if "invoice" not in st.session_state:
     st.session_state.invoice = {}
 
- 
-
-st.title("Chat with Data")
 
 st.sidebar.header("File Manager")
 
@@ -141,6 +138,7 @@ chat_mode = st.sidebar.selectbox("How do you want to start the chat?", ( "Chat w
 #if chat by upploading a file
 if chat_mode == "File Upload":
 
+    st.title("Upload Files")
     #upload fileof type csv, txt, pdf
     fileContract = st.sidebar.file_uploader("Upload a Contract/Policy file", type=[ "pdf"])
     fileInvoice = st.sidebar.file_uploader("Upload an Invoice for Compliance Check", type=["jpeg", "png", "pdf"])
@@ -202,12 +200,6 @@ if chat_mode == "File Upload":
                     ContentType='application/pdf'
                 )
                 st.session_state.file_name = api_output["file_name"]
-                if api_output["status"] == "Success":
-                    for message in st.session_state.messages:
-                        with st.chat_message(message["role"]):
-                            st.markdown(message["content"])
-                    if prompt := st.chat_input("Come on lets Chat!"):
-                        init_chat()
             except FileNotFoundError:
                 st.sidebar.write(f"Error: File '{fileContract.name}' not found.")
             except NoCredentialsError:
@@ -223,6 +215,7 @@ if chat_mode == "File Upload":
 
 # if chat with pre-uploaded docs
 elif chat_mode == "Chat with Pre-Uploaded Data":
+    st.title("Compliance Check Chat")
     doc_list = get_uploaded_docs() #get list of uploaded docs from db
     invoice_list = get_dox_documents()
     # Sidebar dropdown shows only titles

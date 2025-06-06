@@ -15,3 +15,4 @@ aioboto3
 python-multipart
 pdfplumber
 uvicorn
+bs4

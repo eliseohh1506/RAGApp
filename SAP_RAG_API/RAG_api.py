@@ -1,5 +1,7 @@
 from fastapi import FastAPI, File, UploadFile, Form
 import os
+import requests
+from pydantic import BaseModel
 import api_functions as func
 from langchain_community.vectorstores.hanavector import HanaDB
 # from langchain_huggingface import HuggingFaceEndpoint
@@ -29,8 +31,8 @@ async def process_input(file: UploadFile = File(...)): #get file
     #store file temporarily
     file_path = func.get_temp_file_path(file)
     file_extension = os.path.splitext(file_path)[1]
-    #create vector connection
-    db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
+    #create vector connectionS
+    db = HanaDB(embedding=embeddings, connection=conn, table_name="CSN_SQL")
     #find format of file, process it accourding to it and store it as vectors in hanaDB
     texts = []
 
@@ -47,6 +49,20 @@ async def process_input(file: UploadFile = File(...)): #get file
     db.add_documents(texts)
     return {"status": "Success", "file_name": file.filename}
 
+class URLRequest(BaseModel):
+    url: str
+
+#endpoint to craw web documentations and save to HANA
+@app.post("/web")
+async def process_input(request: URLRequest):
+    list_of_links = func.get_all_links(request.url)
+    db = HanaDB(embedding=embeddings, connection=conn, table_name="CSN_SQL")
+    texts = func.get_text_from_links(list_of_links)
+    print(f"Extracted {len(texts)} chunks from file {request.url}")
+    if not texts or all(doc.page_content.strip() == "" for doc in texts):
+        return {"status": "File uploaded, but contains no readable content"}
+    db.add_documents(texts)
+    return {"status": "Success", "file_name": request.url}
 
 
 #endpoint to process query and return answer
@@ -57,7 +73,7 @@ async def process_input(query: str = Form(...), file_name: str = Form("Temp"), i
     llm = ChatOpenAI(deployment_id=id)
 
     #create vector connection
-    db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
+    db = HanaDB(embedding=embeddings, connection=conn, table_name="CSN_SQL")
 
     #create QA chain
     qa_chain = func.get_llm_chain(llm, db, file_name, invoiceDetails)
@@ -78,12 +94,12 @@ async def clear_data(filter: str = Form("None")): # get filter file name
 
     #if there is no file name delete all docs in table
     if filter == "None":
-        db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
+        db = HanaDB(embedding=embeddings, connection=conn, table_name="CSN_SQL")
         db.delete(filter={})
         return {"status": "Success"}
     
     #else delete all docs with that file name in metadata
     else:
-        db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
+        db = HanaDB(embedding=embeddings, connection=conn, table_name="CSN_SQL")
         db.delete(filter={"source":{"$like": "%"+filter+"%"}})
         return {"status": "Success"}

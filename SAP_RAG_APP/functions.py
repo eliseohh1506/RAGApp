@@ -28,6 +28,20 @@ def call_file_api(input_data):
         print(f"Error: Received status code {response.status_code}")
         return None
 
+def web_crawl(url):
+    api_url = "http://127.0.0.1:8000/web/"
+    response = requests.post(api_url, json={"url": url})
+    # Check if the response is successful (200 OK)
+    if response.status_code == 200:
+        try:
+            return response.json()
+        except requests.exceptions.JSONDecodeError:
+            print("Error: Response is not a valid JSON.")
+            return None
+    else:
+        print(f"Error: Received status code {response.status_code}")
+        return None
+
 #function to upload file to dox api
 def dox_upload_file(file, document_type, schema_name):
     url = os.environ.get("DOXURL") + "document/jobs"

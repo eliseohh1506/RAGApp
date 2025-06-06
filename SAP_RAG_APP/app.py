@@ -28,8 +28,8 @@ def init_chat():
     response = func.call_chat_api(prompt, st.session_state.policy_doc, st.session_state.invoice)
     #write and save assistant response
     with st.chat_message("assistant"):
-        # st.write("**Context Used for Answering:**")
-        # st.markdown(response["context"])
+        st.write("**Context Used for Answering:**")
+        st.markdown(response["context"])
         # Display the final answer
         st.write("**Answer:**")
         st.markdown(response["answer"])
@@ -135,51 +135,27 @@ if st.sidebar.button("Clear Chat"):
 
 
 # Dropdown to select if chat with pre-uploaded docs or file upload
-chat_mode = st.sidebar.selectbox("How do you want to start the chat?", ( "Chat with Pre-Uploaded Data","File Upload"))
+chat_mode = st.sidebar.selectbox("How do you want to start the chat?", ( "Chat","File Upload"))
 
 
 #if chat by upploading a file
 if chat_mode == "File Upload":
 
     #upload fileof type csv, txt, pdf
-    fileContract = st.sidebar.file_uploader("Upload a Contract/Policy file", type=[ "pdf"])
-    fileInvoice = st.sidebar.file_uploader("Upload an Invoice for Compliance Check", type=["jpeg", "png", "pdf"])
-    dox_doc_type = st.sidebar.selectbox("Select Document Type", (get_dox_document_type()))
-    dox_schema = st.sidebar.selectbox("Select Schema", (get_dox_schema(dox_doc_type)))
-    
-    st.session_state.upload_file = fileInvoice
-    st.session_state.upload_doc_type = dox_doc_type
-    st.session_state.upload_schema = dox_schema
-    
-    def handle_invoice_upload():
-        file = st.session_state.get("upload_file")
-        doc_type = st.session_state.get("upload_doc_type", "invoice")
-        schema = st.session_state.get("upload_schema", "SAP_invoice_schema")
+    fileContract = st.sidebar.file_uploader("Upload a PDF Documentation", type=[ "pdf"])
 
-        if file:
-            invoice_list = get_dox_documents()
-            if file.name not in invoice_list:
-                api_output = func.dox_upload_file(file, doc_type, schema)
-                st.session_state.file_name = api_output.get("file_name")
-                if api_output.get("status") == "PENDING":
-                    st.session_state.upload_msg = "File is being processed"
-                    for message in st.session_state.get("messages", []):
-                        with st.chat_message(message["role"]):
-                            st.markdown(message["content"])
-                    if prompt := st.chat_input("Come on lets Chat!"):
-                        init_chat()
-                else:
-                    st.session_state.upload_msg = "Upload Failed"
-            else:
-                st.session_state.upload_msg = "File Name already Exist"
-        else:
-            st.session_state.upload_msg = "No file selected"
+    url_input = st.sidebar.text_input(label="Key in URL of documentation")
 
-    # TO DO - add a button to upload the file to DOX
-    st.sidebar.button("Upload Invoice Document", key="upload_doc", on_click=handle_invoice_upload)
-    
-    if "upload_msg" in st.session_state:
-        st.sidebar.write(st.session_state.upload_msg)
+    # Confirm button
+    if st.sidebar.button("Confirm URL"):
+        st.session_state['confirmed_url'] = url_input
+
+    # Access the confirmed URL
+    doc_url = st.session_state.get('confirmed_url')
+    # get all links associated with given url and crawl it, save it to HANA DB as well as S3
+    if doc_url is not None:
+        func.web_crawl(doc_url)
+
     doc_list = get_uploaded_docs()
 
     # if file is already exist in db then show message, if not then call the funciton to upload the file into db by vectorize it.
@@ -220,15 +196,26 @@ if chat_mode == "File Upload":
         else:
             if fileContract.name in doc_list:
                 st.sidebar.write("File Name already Exist")
+    
+    #load chat history from local history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+
+    # if prompt is not empty then call the function to get response
+    if prompt := st.chat_input("Come on lets Chat!"):
+        init_chat()
+        print(st.session_state.messages)
+
 
 # if chat with pre-uploaded docs
-elif chat_mode == "Chat with Pre-Uploaded Data":
+elif chat_mode == "Chat":
     doc_list = get_uploaded_docs() #get list of uploaded docs from db
-    invoice_list = get_dox_documents()
     # Sidebar dropdown shows only titles
     if not doc_list:
-        doc_list = ["No documents available"]
-    policy_doc = st.sidebar.selectbox("Select Policy Document", doc_list)
+        doc_list = ["No PDF documentations grounded"]
+    policy_doc = st.sidebar.selectbox("Select PDF Documentation", doc_list)
 
     if policy_doc != "No documents available":
         doc_url = generate_presigned_url(policy_doc)
@@ -242,41 +229,14 @@ elif chat_mode == "Chat with Pre-Uploaded Data":
             """,
             unsafe_allow_html=True
         )
-        if clear_data := st.sidebar.button("Clear Policy Documents from DB", key="clear_data"):
+        if clear_data := st.sidebar.button("Clear PDF Documentations from DB", key="clear_data"):
             clear_data_db(policy_doc)
     else:
-        st.sidebar.info("Please upload a policy document to begin.")
+        st.sidebar.info("Please upload a PDF documentation to begin.")
 
 
     st.session_state.policy_doc = policy_doc
-    # if not all docs then select doc from sidebar
-    if invoice_list:  # only show invoice-related UI if list is not empty
-        invoice = st.sidebar.selectbox("Select Document to check for compliance", invoice_list)
-        invoiceId = func.dox_getId(invoice)
-        st.session_state.invoice = func.dox_get_fields(invoice)
-
-        url = dox_url(invoiceId)
-
-        st.sidebar.markdown(
-            f"""
-            <a href="{url}" target="_blank">
-                <button style="background-color:#FFFFFF;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:pointer;margin-bottom: 20px">
-                    Check Invoice Extracted Fields
-                </button>
-            </a>
-            """,
-            unsafe_allow_html=True
-        )
-    else:
-        st.sidebar.selectbox("Select Document to check for compliance", ["No documents available"], disabled=True)
-        st.sidebar.markdown(
-            """
-            <button style="background-color:#CCCCCC;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:not-allowed;margin-bottom: 20px" disabled>
-                📄 Check Invoice Extracted Fields
-            </button>
-            """,
-            unsafe_allow_html=True
-        )
+   
     #load chat history from local history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):

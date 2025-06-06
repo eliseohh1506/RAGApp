@@ -6,6 +6,7 @@ from hdbcli import dbapi
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.docstore.document import Document
 from langchain_community.document_loaders import TextLoader
+from langchain.document_loaders import WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langgraph.graph import START, StateGraph
@@ -16,8 +17,18 @@ from langchain.schema import Document
 import pdfplumber
 from PIL import Image
 import pytesseract
+import requests
+import bs4
+import boto3
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin, urlparse
 
 load_dotenv()
+os.environ["AWS_ACCESS_KEY_ID"] = os.environ.get("AWS_ACCESS_KEY_ID")
+os.environ["AWS_SECRET_ACCESS_KEY"] = os.environ.get("AWS_SECRET_ACCESS_KEY")
+os.environ["AWS_DEFAULT_REGION"] = os.environ.get("AWS_DEFAULT_REGION")
+bucket_name = os.environ.get("AWS_BUCKET_NAME")
+s3 = boto3.client("s3")
 
 # Format documents to include source references in the context
 def format_documents_with_metadata(docs):
@@ -65,13 +76,77 @@ def get_text_from_pdf(file_path):
             doc = Document(id=os.path.basename(file_path), 
                            page_content=text, 
                            metadata={"page": i + 1, 
-                                     "title": os.path.basename(file_path)})
+                                     "source": os.path.basename(file_path)})
 
             # Chunk this single page-document while preserving metadata
             chunks = text_splitter.split_documents([doc])
             texts.extend(chunks)
 
     return texts
+
+#function to process web page links, convert to Docs and chunk it, saving it to S3 
+def get_text_from_links(links):
+    texts = []
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=50,
+    )
+    for url in links:
+        print(f"Processing {url} ...")
+        # Load webpage content with filtering classes if needed
+        loader = WebBaseLoader(
+            web_paths=[url],
+            bs_kwargs=dict(
+                parse_only=bs4.SoupStrainer("main", class_="main")
+            ),
+        )
+        docs = loader.load()
+        print(docs)
+        for doc in docs:
+            # Optional: parse the URL to get a simple filename-like ID
+            parsed_url = urlparse(url)
+            file_id = os.path.basename(parsed_url.path) or parsed_url.netloc
+
+            # Create a new Document with id and cleaned metadata
+            new_doc = Document(
+                page_content=doc.page_content,
+                metadata={
+                    "id": file_id,
+                    "source": url,
+                }
+            )
+
+            # Chunk this one document
+            chunks = text_splitter.split_documents([new_doc])
+            texts.extend(chunks)
+        
+    return texts
+
+# Crawl all links on given page
+def get_all_links(base_url):
+    response = requests.get(base_url)
+    soup = BeautifulSoup(response.text, "html.parser")
+    links = set()
+
+    parsed_base = urlparse(base_url)
+    base_netloc = parsed_base.netloc
+    base_path = parsed_base.path.rstrip("/")
+
+    for tag in soup.find_all("a", href=True):
+        href = tag['href']
+        full_url = urljoin(base_url, href)
+        parsed_url = urlparse(full_url)
+
+        # Same domain
+        if parsed_url.netloc != base_netloc:
+            continue
+
+        # Only include links nested under base path
+        target_path = parsed_url.path.rstrip("/")
+        if target_path.startswith(base_path) and target_path != base_path:
+            links.add(full_url)
+
+    return [base_url] + sorted(links)
 
 #function to process csv, convert it as docs and return pages
 def get_text_from_csv(file, key_column):
@@ -117,7 +192,7 @@ def get_llm_chain(llm, db, file_name, invoiceDetails):
 
     # set the prompt templte
     prompt_template = """
-    You are a compliance assistant. Based on the extracted invoice fields and the policy document context, answer the user question.
+    Based on documentation context, answer the user question.
 
     ### Extracted Invoice Fields:
     {invoiceDetails}
@@ -130,20 +205,9 @@ def get_llm_chain(llm, db, file_name, invoiceDetails):
 
     Rules:
     - Answer question directly and concised
-    - If no compliance check implied by user question, don't do compliance check
-    - Be concise and explain which fields are compliant or non-compliant if asked to compare extracted fields against policy document.
-    - Include the **page** for each policy rule you refer to. 
-    - Page can be derived from metadata of the page_content where policy is found. If unknown, write 'Unknown'.
+    - Include the **source** for each documentation rule you refer to. 
+    - Source can be derived from metadata of the page_content where documentation is found. If unknown, write 'Unknown'.
     """
-    retriever = db.as_retriever(
-        search_type="similarity_score_threshold",
-        search_kwargs={
-            "k": 5,
-            "score_threshold": 0.3,
-            "filter": {"title": {"$like": "%" + file_name + "%"}}
-        }
-    )
-
     class ChatState(TypedDict):
         question: str
         context: List[Document]
@@ -153,11 +217,8 @@ def get_llm_chain(llm, db, file_name, invoiceDetails):
 
     # Retrieval step
     def retrieve(state: ChatState):
-        question = state["question"]
-        docs = retriever.get_relevant_documents(question)
-        if not docs:
-            docs = db.similarity_search("", 100, 
-                                        filter={"title": {"$like": "%" + file_name + "%"}})
+        docs = db.similarity_search("", 100, 
+                                    filter={"source": {"$like": "%" + file_name + "%"}})
         return {"context": docs}
     
     # Generation step with memory

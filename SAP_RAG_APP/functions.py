@@ -3,6 +3,7 @@ from requests.auth import HTTPBasicAuth
 from hdbcli import dbapi
 import pandas as pd
 import json
+import httpx
 import os
 import mimetypes
 from dotenv import load_dotenv
@@ -79,18 +80,16 @@ def dox_upload_file(file, document_type, schema_name):
         raise Exception(f"Failed to upload file to DOX: {response.status_code} - {response.text}")
 
 #function to call the chat api
-def call_chat_api(query, file_name = None, invoiceDetails = None, history = None):
-    if file_name == None:
-        querys = {"query": query}
-    else:
-        querys = {"query": query, "file_name": file_name, 
-                  "invoiceDetails": json.dumps(invoiceDetails) if invoiceDetails else "{}"}
-    api_url = "http://127.0.0.1:8000/chat/"
-    resp = requests.post(api_url, data=querys)
-    # print(resp.status_code, resp.text)
-    response = resp.json()  # only if status and content look correct
-
-    return response
+def call_chat_api(query, invoiceDetails = None, history = None):
+    querys = {"query": query, 
+            "invoiceDetails": json.dumps(invoiceDetails) if invoiceDetails else "{}",
+            "chatHistory": json.dumps(history) if history else "[]"}
+    api_url = "http://127.0.0.1:8000/chat"
+    with httpx.stream("POST", api_url, data=querys, timeout=None) as response:
+        response.raise_for_status()  # Raise error on bad status
+        for chunk in response.iter_text():
+            if chunk.strip():
+                yield chunk
 
 #function to get the hana db connection
 def get_hana_db_conn():

@@ -15,6 +15,7 @@ import re
 from dotenv import load_dotenv
 from langchain.schema import Document
 import pdfplumber
+from typing import AsyncGenerator
 from PIL import Image
 import pytesseract
 import requests
@@ -188,13 +189,29 @@ def get_text_from_txt(file):
 
 #function to create llm-chain and return it
 #TO DO - incorporate details from DOX to cross check with policy documents. 
-def get_llm_chain(llm, db, file_name, invoiceDetails):
+def get_llm_chain(llm, db, invoiceDetails):
 
     # set the prompt templte
     prompt_template = """
-    Based on documentation context, answer the user question.
+    You are tasked to convert SAP CSN structures into SQL to privide a flattened view. Based on documentation context, answer the user question.
 
-    ### Extracted Invoice Fields:
+    When beeing asked to convert CSN to SQL do the following:
+    1) Analyse the CSN structure: 
+    - List associations
+    - if the CSN contains hierarchies show haw the hierachy associations are linked
+    - if the CSN contains filter conditions list them
+    - if the CSN contains language dependen text, ask if language filter should be added
+    - if the CSN contains validity end dates, ask if filter should be applied for validity end dates
+    - if the CSN defines a fact view, then list the fact / transactional data and list the associoated dimensions. include the formulas for calculations/measures.
+    - List access control related information
+    - Identify the Analytics.dataCategory, explain its meaning and how it affects the SQL transformation
+    
+    2) create a SQL statement to flatten the CSN structure
+    - if the CSN includes hierarchies, exclude them from the SQL, but ask if the hierarchies should be included
+    
+    Use Databricks SQL, display full SQL query not just a snippet
+
+    ### CSN file:
     {invoiceDetails}
     
     ### Policy Document Context:
@@ -203,11 +220,24 @@ def get_llm_chain(llm, db, file_name, invoiceDetails):
     ### User Question:
     {question}
 
+    ### Chat History:
+    {chatHistory}
+
     Rules:
     - Answer question directly and concised
+    - Using Chat history, allow user to ask follow up questions.
+    - If source is from CSN file uploaded, say its CSN file uploaded
     - Include the **source** for each documentation rule you refer to. 
     - Source can be derived from metadata of the page_content where documentation is found. If unknown, write 'Unknown'.
     """
+    retriever = db.as_retriever(
+        search_type="similarity_score_threshold",
+        search_kwargs={
+            "k": 5,
+            "score_threshold": 0.3,
+            "filter": {}
+        }
+    )
     class ChatState(TypedDict):
         question: str
         context: List[Document]
@@ -217,15 +247,16 @@ def get_llm_chain(llm, db, file_name, invoiceDetails):
 
     # Retrieval step
     def retrieve(state: ChatState):
-        docs = db.similarity_search("", 100, 
-                                    filter={"source": {"$like": "%" + file_name + "%"}})
+        question = state["question"]
+        docs = retriever.get_relevant_documents(question)
+        docs = db.similarity_search("", 100)
         return {"context": docs}
     
     # Generation step with memory
-    def generate(state: ChatState):
+    async def generate(state: ChatState):
         question = state["question"]
         context = "\n\n".join(
-            f"(Page {doc.metadata.get('page', 'Unknown')})\n{doc.page_content}"
+            f"({doc.metadata.get('source', 'Unknown')})\n{doc.page_content}"
             for doc in state["context"]
         )
         invoice_details = state.get("invoiceDetails", "")
@@ -234,18 +265,18 @@ def get_llm_chain(llm, db, file_name, invoiceDetails):
         prompt = prompt_template.format(
             question=question,
             invoiceDetails=invoice_details,
-            context=context
+            context=context,
+            chatHistory=chat_history
         )
 
-        response = llm.invoke(prompt)
+        async for chunk in llm.astream(prompt):
+            if chunk.content:
+                yield chunk.content
 
-        # chat_history.append(HumanMessage(content=question))
-        # chat_history.append(AIMessage(content=response.content))
-
-        return {
-            "answer": response.content,
-            "chat_history": chat_history
-        }
+    return {
+        "retrieve": retrieve,
+        "generate_stream": generate
+    }
 
     # Build the LangGraph
     graph_builder = StateGraph(ChatState).add_sequence([retrieve, generate])

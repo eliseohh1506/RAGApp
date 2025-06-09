@@ -1,4 +1,5 @@
 from fastapi import FastAPI, File, UploadFile, Form
+from fastapi.responses import StreamingResponse
 import os
 import requests
 from pydantic import BaseModel
@@ -67,25 +68,32 @@ async def process_input(request: URLRequest):
 
 #endpoint to process query and return answer
 @app.post("/chat")
-async def process_input(query: str = Form(...), file_name: str = Form("Temp"), invoiceDetails: str = Form({})): #get query and file name
+async def process_input(query: str = Form(...), invoiceDetails: str = Form({}), chatHistory: str = Form([])): #get query and file name
 
     id = os.environ.get("LLM_DEPLOYMENT_ID")
-    llm = ChatOpenAI(deployment_id=id)
+    llm = ChatOpenAI(deployment_id=id, streaming=True)
 
     #create vector connection
     db = HanaDB(embedding=embeddings, connection=conn, table_name="CSN_SQL")
 
     #create QA chain
-    qa_chain = func.get_llm_chain(llm, db, file_name, invoiceDetails)
+    qa_chain = func.get_llm_chain(llm, db, invoiceDetails)
 
     question_with_invoice = {
         "question": query,
-        "chat_history": history,
+        "chat_history": chatHistory,
         "invoiceDetails": invoiceDetails
     }
-    #get answer
-    result = qa_chain.invoke(question_with_invoice)
-    return result
+    print(chatHistory)
+    context_state = qa_chain["retrieve"](question_with_invoice)
+    question_with_invoice.update(context_state)
+
+    # Create async generator
+    async def stream_generator():
+        async for chunk in qa_chain["generate_stream"](question_with_invoice):
+            yield chunk
+
+    return StreamingResponse(stream_generator(), media_type="text/plain")
 
 
 #endpoint to clear data

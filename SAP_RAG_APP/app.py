@@ -1,5 +1,6 @@
 import streamlit as st 
 import functions as func
+import json
 import os
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
@@ -11,6 +12,9 @@ os.environ["AWS_SECRET_ACCESS_KEY"] = os.environ.get("AWS_SECRET_ACCESS_KEY")
 os.environ["AWS_DEFAULT_REGION"] = os.environ.get("AWS_DEFAULT_REGION")
 bucket_name = os.environ.get("AWS_BUCKET_NAME")
 s3 = boto3.client("s3")
+
+if "csn" not in st.session_state:
+    st.session_state["csn"] = None
 
 #function to clear the local chat history
 @st.experimental_fragment
@@ -24,16 +28,18 @@ def init_chat():
     #write and save user prompt
     st.chat_message("user").markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
-
-    response = func.call_chat_api(prompt, st.session_state.policy_doc, st.session_state.invoice)
     #write and save assistant response
     with st.chat_message("assistant"):
-        st.write("**Context Used for Answering:**")
-        st.markdown(response["context"])
+        # st.write("**Context Used for Answering:**")
+        # st.markdown(response["context"])
         # Display the final answer
         st.write("**Answer:**")
-        st.markdown(response["answer"])
-    st.session_state.messages.append({"role": "assistant", "content": response["answer"]})
+        placeholder = st.empty()
+        full_response = ""
+        for token in func.call_chat_api(prompt, st.session_state.csn, st.session_state.messages):
+            full_response += token
+            placeholder.markdown(full_response)
+    st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 
 #function to get list of uploaded docs from AWS S3 bucket 
@@ -120,12 +126,10 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "policy_doc" not in st.session_state:
     st.session_state.policy_doc = ""
-if "invoice" not in st.session_state:
-    st.session_state.invoice = {}
+if "csn" not in st.session_state:
+    st.session_state.csn = {}
 
- 
-
-st.title("Chat with Data")
+st.title("Chat Interface")
 
 st.sidebar.header("File Manager")
 
@@ -133,117 +137,67 @@ st.sidebar.header("File Manager")
 if st.sidebar.button("Clear Chat"):
     clear_chat()   
 
+#upload fileof type csv, txt, pdf
+fileContract = st.sidebar.file_uploader("Upload a PDF Documentation", type=[ "pdf"])
 
-# Dropdown to select if chat with pre-uploaded docs or file upload
-chat_mode = st.sidebar.selectbox("How do you want to start the chat?", ( "Chat","File Upload"))
+url_input = st.sidebar.text_input(label="Key in URL of documentation")
+st.session_state['confirmed_url'] = url_input
+# Confirm button
+if st.sidebar.button("Confirm URL"):
+    st.session_state['confirmed_url'] = url_input
 
+# Access the confirmed URL
+doc_url = st.session_state.get('confirmed_url')
+# get all links associated with given url and crawl it, save it to HANA DB as well as S3
+if doc_url != "":
+    func.web_crawl(doc_url)
 
-#if chat by upploading a file
-if chat_mode == "File Upload":
+csn = st.sidebar.file_uploader("Upload a CSN file", type=[ "json"])
+if csn is not None:
+    csn_content = json.load(csn)
+    st.session_state.csn = csn_content
 
-    #upload fileof type csv, txt, pdf
-    fileContract = st.sidebar.file_uploader("Upload a PDF Documentation", type=[ "pdf"])
+doc_list = get_uploaded_docs()
 
-    url_input = st.sidebar.text_input(label="Key in URL of documentation")
-
-    # Confirm button
-    if st.sidebar.button("Confirm URL"):
-        st.session_state['confirmed_url'] = url_input
-
-    # Access the confirmed URL
-    doc_url = st.session_state.get('confirmed_url')
-    # get all links associated with given url and crawl it, save it to HANA DB as well as S3
-    if doc_url is not None:
-        func.web_crawl(doc_url)
-
-    doc_list = get_uploaded_docs()
-
-    # if file is already exist in db then show message, if not then call the funciton to upload the file into db by vectorize it.
-    if fileContract is not None:
-        if fileContract.name not in doc_list:
-            #Upload to both S3 and Hana vector store
-            bucket_name=os.environ.get("AWS_BUCKET_NAME")
-            try:
-                api_output = func.call_file_api(fileContract)
-                fileContract.seek(0)
-                st.sidebar.write(api_output["status"])
-                s3.upload_fileobj(fileContract, bucket_name, fileContract.name)
-                #Update metadata after upload
-                s3.copy_object(
-                    Bucket=bucket_name,
-                    CopySource={'Bucket': bucket_name, 'Key': fileContract.name},
-                    Key=fileContract.name,
-                    MetadataDirective='REPLACE',
-                    ContentDisposition='inline',
-                    ContentType='application/pdf'
-                )
-                st.session_state.file_name = api_output["file_name"]
-                if api_output["status"] == "Success":
-                    for message in st.session_state.messages:
-                        with st.chat_message(message["role"]):
-                            st.markdown(message["content"])
-                    if prompt := st.chat_input("Come on lets Chat!"):
-                        init_chat()
-            except FileNotFoundError:
-                st.sidebar.write(f"Error: File '{fileContract.name}' not found.")
-            except NoCredentialsError:
-                st.sidebar.write("Error: No AWS credentials found.")
-            except ClientError as e:
-                error_code = e.response['Error']['Code']
-                st.sidebar.write(f"Error: {error_code} - {e}")
-            except Exception as e:
-                st.sidebar.write(f"An unexpected error occurred: {e}")
-        else:
-            if fileContract.name in doc_list:
-                st.sidebar.write("File Name already Exist")
-    
-    #load chat history from local history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-    
-
-    # if prompt is not empty then call the function to get response
-    if prompt := st.chat_input("Come on lets Chat!"):
-        init_chat()
-        print(st.session_state.messages)
-
-
-# if chat with pre-uploaded docs
-elif chat_mode == "Chat":
-    doc_list = get_uploaded_docs() #get list of uploaded docs from db
-    # Sidebar dropdown shows only titles
-    if not doc_list:
-        doc_list = ["No PDF documentations grounded"]
-    policy_doc = st.sidebar.selectbox("Select PDF Documentation", doc_list)
-
-    if policy_doc != "No documents available":
-        doc_url = generate_presigned_url(policy_doc)
-        st.sidebar.markdown(
-            f"""
-            <a href="{doc_url}" target="_blank">
-                <button style="background-color:#FFFFFF;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:pointer;margin-bottom: 20px">
-                    See Policy Document
-                </button>
-            </a>
-            """,
-            unsafe_allow_html=True
-        )
-        if clear_data := st.sidebar.button("Clear PDF Documentations from DB", key="clear_data"):
-            clear_data_db(policy_doc)
+# if file is already exist in db then show message, if not then call the funciton to upload the file into db by vectorize it.
+if fileContract is not None:
+    if fileContract.name not in doc_list:
+        #Upload to both S3 and Hana vector store
+        bucket_name=os.environ.get("AWS_BUCKET_NAME")
+        try:
+            api_output = func.call_file_api(fileContract)
+            fileContract.seek(0)
+            st.sidebar.write(api_output["status"])
+            s3.upload_fileobj(fileContract, bucket_name, fileContract.name)
+            #Update metadata after upload
+            s3.copy_object(
+                Bucket=bucket_name,
+                CopySource={'Bucket': bucket_name, 'Key': fileContract.name},
+                Key=fileContract.name,
+                MetadataDirective='REPLACE',
+                ContentDisposition='inline',
+                ContentType='application/pdf'
+            )
+            st.session_state.file_name = api_output["file_name"]
+        except FileNotFoundError:
+            st.sidebar.write(f"Error: File '{fileContract.name}' not found.")
+        except NoCredentialsError:
+            st.sidebar.write("Error: No AWS credentials found.")
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            st.sidebar.write(f"Error: {error_code} - {e}")
+        except Exception as e:
+            st.sidebar.write(f"An unexpected error occurred: {e}")
     else:
-        st.sidebar.info("Please upload a PDF documentation to begin.")
-
-
-    st.session_state.policy_doc = policy_doc
-   
-    #load chat history from local history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        if fileContract.name in doc_list:
+            st.sidebar.write("File Name already Exist")
     
+#load chat history from local history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-    # if prompt is not empty then call the function to get response
-    if prompt := st.chat_input("Come on lets Chat!"):
-        init_chat()
-        print(st.session_state.messages)
+# if prompt is not empty then call the function to get response
+if prompt := st.chat_input("Come on lets Chat!"):
+    init_chat()
+    print(st.session_state.messages)

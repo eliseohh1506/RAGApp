@@ -59,7 +59,7 @@ async def process_input(query: str = Form(...), file_name: str = Form("Temp"), i
     #create vector connection
     db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
 
-    #create QA chain
+    #create langgraph 
     qa_chain = func.get_llm_chain(llm, db, file_name, invoiceDetails)
 
     question_with_invoice = {

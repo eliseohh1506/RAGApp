@@ -18,12 +18,22 @@ Check whether you see an SAP AI Core service instance and an SAP AI Launchpad ap
 
 👉 If you haven't created an AI Core instance, go to Service Marketplace and search for SAP AI Core -> Click Create, choose ``extended`` plan, Cloud Foundry runtime environment and give it an instance name. -> Create instance 
 
-![AICore](assets/AiCore_create.png)
+![AICore](assets/AICore_create.png)
 
 👉 Click into the new AI Core instance you've created, if there's no service key already, click create a new one and give your service key a name. No need to input any JSON, just click Create.
 
-![AICore_Servicekey](assets/AiCore_servicekey.png)
+![AICore_Servicekey](assets/AICore_servicekey.png)
 
 👉 If you haven't created an AI Launchpad Subscription, go to Service Marketplace and search for SAP AI Launchpad -> Click Create
 
 ![AI Launchpad](assets/AILaunchpad_create.png)
+
+## STEP 3: Connect to Document Information Extraction Service 
+
+👉 Go to Instances and Subscriptions.
+
+Check whether you see an Document Information Extraction instance as well as subscription. Ensure your Document Information Extraction service instance runs on the ``premium_edition`` plan to process custom documents using generative AI.
+
+👉 If you haven't created an Document Information Extraction instance or subscription, go to Service Marketplace and search for Document Information Extraction -> Click Create, choose service plan of ``premium_edition`` and click create. 
+
+👉 For Subscription, go to Service Marketplace and search for Document Information Extraction -> Click Create, choose subscription plan of ``default`` and click create. 

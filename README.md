@@ -24,6 +24,10 @@ You must also make sure:
 
 ### Structure of Repository:
 
+EXERCISES:
+
+- Contains step by step guide on how to replicate key components of this application. Each exercise handles one part of the application. 
+
 SAP_RAG_APP:
 
 - app.py - The main application where a document can be uploaded, source document can be viewed, deleted or users can chat with it.

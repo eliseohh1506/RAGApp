@@ -2,7 +2,6 @@
 Hostname=
 Port=
 HANA_USERNAME=
-HANA_DL_USERNAME=
 Password=
 
 //AI launchpad LLM deployment ID

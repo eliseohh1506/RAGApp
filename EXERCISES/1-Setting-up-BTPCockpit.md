@@ -73,3 +73,5 @@ We will create the SAP HANA Cloud instance within the SAP HANA Cloud Application
 👉 Go to Service Marketplace and search for Object Store -> Click Create, choose service plan of ``s3-standard``, runtime environment of Cloud Foundry, input an instance name and click create. 
 
 👉 Go to Instances and Subscriptions. Under Instances, click into your object store instance -> Create new service key, give it a service key name and click create.  
+
+[Next Exercise](2-Setting-up-env-file.md)

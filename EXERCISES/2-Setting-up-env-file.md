@@ -58,11 +58,11 @@ Enter Resource group you've deployed your LLMS into ``AICORE_RESOURCE_GROUP`` in
 
 👉 In your BTP Cockpit, click into your Document Information Extraction service key. 
 
-Map ***uaa, url*** field into ``DOX_AUTH_URL`` in your .env file. 
-Map ***uaa, clientid*** field into ``DOX_CLIENT_ID`` in your .env file. 
-Map ***uaa, clientsecret*** field into ``DOX_CLIENT_SECRET`` in your .env file. 
-Map ***tenantuiurl*** + ***swagger*** field into ``DOXURL`` in your .env file. (e.g. ***https://dial-3-0-zme762l7.ap10.doc.cloud.sap/document-information-extraction/v1/***)
-Map ***tenantuiurl*** + ***/ui?*** field into ``DOXURL`` in your .env file. (e.g. ***https://dial-3-0-zme762l7.ap10.doc.cloud.sap/ui?***)
+Map ***uaa, url*** field into ``DOX_AUTH_URL`` in your .env file.  
+Map ***uaa, clientid*** field into ``DOX_CLIENT_ID`` in your .env file.  
+Map ***uaa, clientsecret*** field into ``DOX_CLIENT_SECRET`` in your .env file.  
+Map ***tenantuiurl*** + ***swagger*** field into ``DOXURL`` in your .env file. (e.g. ***https://dial-3-0-zme762l7.ap10.doc.cloud.sap/document-information-extraction/v1/***)  
+Map ***tenantuiurl*** + ***/ui?*** field into ``DOXURL`` in your .env file. (e.g. ***https://dial-3-0-zme762l7.ap10.doc.cloud.sap/ui?***)  
 
 ![DOX Credentials](assets/DoX_credentials.png)
 
@@ -78,10 +78,10 @@ Map the clientId you choose to ``DOX_CLIENT_NAME`` in your .env file.
 
 👉 In your BTP Cockpit, click into your Object Store service key. 
 
-Map ***access_key_id*** field into ``AWS_ACCESS_KEY_ID`` in your .env file. 
-Map ***secret_access_key*** field into ``AWS_SECRET_ACCESS_KEY`` in your .env file. 
-Map ***region*** field into ``AWS_DEFAULT_REGION`` in your .env file. 
-Map ***bucket*** field into ``AWS_BUCKET_NAME`` in your .env file. 
+Map ***access_key_id*** field into ``AWS_ACCESS_KEY_ID`` in your .env file.  
+Map ***secret_access_key*** field into ``AWS_SECRET_ACCESS_KEY`` in your .env file.  
+Map ***region*** field into ``AWS_DEFAULT_REGION`` in your .env file.  
+Map ***bucket*** field into ``AWS_BUCKET_NAME`` in your .env file.  
 
 ![Object Store Credentials](assets/ObjStore_credentials.png)
 

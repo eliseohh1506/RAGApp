@@ -21,7 +21,7 @@ In this section, we will be inputting in the required service instance keys for 
 
 👉 In your BTP Cockpit, click into your AI Launchpad application. 
 
-👉 Create a new Resource Group using this [tutorial] (https://help.sap.com/docs/ai-launchpad/sap-ai-launchpad/create-resource-group)
+👉 Create a new Resource Group using this [tutorial](https://help.sap.com/docs/ai-launchpad/sap-ai-launchpad/create-resource-group)
 
 > SAP AI Core tenants use [resource groups](https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/resource-groups) to isolate related ML resources and workloads. Scenarios, executables, and Docker registry secrets are shared across all resource groups.
 
@@ -46,11 +46,11 @@ Map the text-embedding model ID into ``EMBEDDING_DEPLOYMENT_ID`` in your .env fi
 
 👉 In your BTP Cockpit, click into your AI Core instance's service key. 
 
-Map ***url*** field into ``AICORE_AUTH_URL`` in your .env file. 
-Map ***clientid*** field into ``AICORE_CLIENT_ID`` in your .env file. 
-Map ***clientsecret*** field into ``AICORE_CLIENT_SECRET`` in your .env file. 
-Map ***AI_API_URL*** field into ``AICORE_BASE_URL`` in your .env file. 
-Enter Resource group you've deployed your LLMS into ``AICORE_RESOURCE_GROUP`` in your .env file. 
+Map ***url*** field into ``AICORE_AUTH_URL`` in your .env file.  
+Map ***clientid*** field into ``AICORE_CLIENT_ID`` in your .env file.  
+Map ***clientsecret*** field into ``AICORE_CLIENT_SECRET`` in your .env file.  
+Map ***AI_API_URL*** field into ``AICORE_BASE_URL`` in your .env file.  
+Enter Resource group you've deployed your LLMS into ``AICORE_RESOURCE_GROUP`` in your .env file.  
 
 ![AI Core Credentials](assets/AICore_credentials.png)
 

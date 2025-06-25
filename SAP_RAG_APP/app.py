@@ -135,7 +135,7 @@ if st.sidebar.button("Clear Chat"):
 chat_mode = st.sidebar.selectbox("How do you want to start the chat?", ( "Chat with Pre-Uploaded Data","File Upload"))
 
 
-#if chat by upploading a file
+#if chat by uploading a file
 if chat_mode == "File Upload":
 
     st.title("Upload Files")
@@ -145,14 +145,10 @@ if chat_mode == "File Upload":
     dox_doc_type = st.sidebar.selectbox("Select Document Type", (get_dox_document_type()))
     dox_schema = st.sidebar.selectbox("Select Schema", (get_dox_schema(dox_doc_type)))
     
-    st.session_state.upload_file = fileInvoice
-    st.session_state.upload_doc_type = dox_doc_type
-    st.session_state.upload_schema = dox_schema
-    
     def handle_invoice_upload():
-        file = st.session_state.get("upload_file")
-        doc_type = st.session_state.get("upload_doc_type", "invoice")
-        schema = st.session_state.get("upload_schema", "SAP_invoice_schema")
+        file = fileInvoice
+        doc_type = dox_doc_type
+        schema = dox_schema
 
         if file:
             invoice_list = get_dox_documents()

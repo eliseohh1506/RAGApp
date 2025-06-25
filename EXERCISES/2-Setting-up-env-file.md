@@ -85,4 +85,4 @@ Map ***bucket*** field into ``AWS_BUCKET_NAME`` in your .env file.
 
 ![Object Store Credentials](assets/ObjStore_credentials.png)
 
-[Next Exercise](3-Understanding-frontend.md)
+[Next Exercise](3-Understanding-frontendpt1.md)

@@ -51,7 +51,7 @@ async def process_input(file: UploadFile = File(...)): #get file
 
 #endpoint to process query and return answer
 @app.post("/chat")
-async def process_input(query: str = Form(...), file_name: str = Form("Temp"), invoiceDetails: str = Form({})): #get query and file name
+async def process_input(query: str = Form(...)): #get query and file name
 
     id = os.environ.get("LLM_DEPLOYMENT_ID")
     llm = ChatOpenAI(deployment_id=id)
@@ -60,12 +60,11 @@ async def process_input(query: str = Form(...), file_name: str = Form("Temp"), i
     db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
 
     #create langgraph 
-    qa_chain = func.get_llm_chain(llm, db, file_name, invoiceDetails)
+    qa_chain = func.get_llm_chain(llm, db)
 
     question_with_invoice = {
         "question": query,
-        "chat_history": history,
-        "invoiceDetails": invoiceDetails
+        "chat_history": history
     }
     #get answer
     result = qa_chain.invoke(question_with_invoice)

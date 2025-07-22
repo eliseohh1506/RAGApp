@@ -25,13 +25,13 @@ def init_chat():
     st.chat_message("user").markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    response = func.call_chat_api(prompt, st.session_state.policy_doc, st.session_state.invoice)
+    response = func.call_chat_api(prompt)
     #write and save assistant response
     with st.chat_message("assistant"):
         # st.write("**Context Used for Answering:**")
         # st.markdown(response["context"])
-        # Display the final answer
-        st.write("**Answer:**")
+        # # Display the final answer
+        # st.write("**Answer:**")
         st.markdown(response["answer"])
     st.session_state.messages.append({"role": "assistant", "content": response["answer"]})
 
@@ -55,7 +55,7 @@ def get_dox_documents():
     results = func.dox_get_all_documents()
     if results and isinstance(results, list):
         doc_list = [os.path.basename(doc["fileName"]) for doc in results if "fileName" in doc]
-        doc_list = list(set(doc_list))  # optional: remove duplicates
+        doc_list = list(set(doc_list))  
         return doc_list
     else:
         return []
@@ -120,100 +120,17 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "policy_doc" not in st.session_state:
     st.session_state.policy_doc = ""
-if "invoice" not in st.session_state:
-    st.session_state.invoice = {}
 
-
-st.sidebar.header("File Manager")
-
-#button to clear the local chat history
-if st.sidebar.button("Clear Chat"):
-    clear_chat()   
 
 
 # Dropdown to select if chat with pre-uploaded docs or file upload
-chat_mode = st.sidebar.selectbox("How do you want to start the chat?", ( "Chat with Pre-Uploaded Data","File Upload"))
+chat_mode = "Chat with Pre-Uploaded Data"
 
-
-#if chat by uploading a file
-if chat_mode == "File Upload":
-
-    st.title("Upload Files")
-    #upload fileof type csv, txt, pdf
-    fileContract = st.sidebar.file_uploader("Upload a Contract/Policy file", type=[ "pdf"])
-    fileInvoice = st.sidebar.file_uploader("Upload an Invoice for Compliance Check", type=["jpeg", "png", "pdf"])
-    dox_doc_type = st.sidebar.selectbox("Select Document Type", (get_dox_document_type()))
-    dox_schema = st.sidebar.selectbox("Select Schema", (get_dox_schema(dox_doc_type)))
-    
-    def handle_invoice_upload():
-        file = fileInvoice
-        doc_type = dox_doc_type
-        schema = dox_schema
-
-        if file:
-            invoice_list = get_dox_documents()
-            if file.name not in invoice_list:
-                api_output = func.dox_upload_file(file, doc_type, schema)
-                st.session_state.file_name = api_output.get("file_name")
-                if api_output.get("status") == "PENDING":
-                    st.session_state.upload_msg = "File is being processed"
-                    for message in st.session_state.get("messages", []):
-                        with st.chat_message(message["role"]):
-                            st.markdown(message["content"])
-                    if prompt := st.chat_input("Come on lets Chat!"):
-                        init_chat()
-                else:
-                    st.session_state.upload_msg = "Upload Failed"
-            else:
-                st.session_state.upload_msg = "File Name already Exist"
-        else:
-            st.session_state.upload_msg = "No file selected"
-
-    # TO DO - add a button to upload the file to DOX
-    st.sidebar.button("Upload Invoice Document", key="upload_doc", on_click=handle_invoice_upload)
-    
-    if "upload_msg" in st.session_state:
-        st.sidebar.write(st.session_state.upload_msg)
-    doc_list = get_uploaded_docs()
-
-    # if file is already exist in db then show message, if not then call the funciton to upload the file into db by vectorize it.
-    if fileContract is not None:
-        if fileContract.name not in doc_list:
-            #Upload to both S3 and Hana vector store
-            bucket_name=os.environ.get("AWS_BUCKET_NAME")
-            try:
-                api_output = func.call_file_api(fileContract)
-                fileContract.seek(0)
-                st.sidebar.write(api_output["status"])
-                s3.upload_fileobj(fileContract, bucket_name, fileContract.name)
-                #Update metadata after upload
-                s3.copy_object(
-                    Bucket=bucket_name,
-                    CopySource={'Bucket': bucket_name, 'Key': fileContract.name},
-                    Key=fileContract.name,
-                    MetadataDirective='REPLACE',
-                    ContentDisposition='inline',
-                    ContentType='application/pdf'
-                )
-                st.session_state.file_name = api_output["file_name"]
-            except FileNotFoundError:
-                st.sidebar.write(f"Error: File '{fileContract.name}' not found.")
-            except NoCredentialsError:
-                st.sidebar.write("Error: No AWS credentials found.")
-            except ClientError as e:
-                error_code = e.response['Error']['Code']
-                st.sidebar.write(f"Error: {error_code} - {e}")
-            except Exception as e:
-                st.sidebar.write(f"An unexpected error occurred: {e}")
-        else:
-            if fileContract.name in doc_list:
-                st.sidebar.write("File Name already Exist")
 
 # if chat with pre-uploaded docs
-elif chat_mode == "Chat with Pre-Uploaded Data":
+if chat_mode == "Chat with Pre-Uploaded Data":
     st.title("Compliance Check Chat")
     doc_list = get_uploaded_docs() #get list of uploaded docs from db
-    invoice_list = get_dox_documents()
     # Sidebar dropdown shows only titles
     if not doc_list:
         doc_list = ["No documents available"]
@@ -225,47 +142,18 @@ elif chat_mode == "Chat with Pre-Uploaded Data":
             f"""
             <a href="{doc_url}" target="_blank">
                 <button style="background-color:#FFFFFF;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:pointer;margin-bottom: 20px">
-                    See Policy Document
+                    See Event Document
                 </button>
             </a>
             """,
             unsafe_allow_html=True
         )
-        if clear_data := st.sidebar.button("Clear Policy Documents from DB", key="clear_data"):
-            clear_data_db(policy_doc)
     else:
         st.sidebar.info("Please upload a policy document to begin.")
 
 
     st.session_state.policy_doc = policy_doc
-    # if not all docs then select doc from sidebar
-    if invoice_list:  # only show invoice-related UI if list is not empty
-        invoice = st.sidebar.selectbox("Select Document to check for compliance", invoice_list)
-        invoiceId = func.dox_getId(invoice)
-        st.session_state.invoice = func.dox_get_fields(invoice)
 
-        url = dox_url(invoiceId)
-
-        st.sidebar.markdown(
-            f"""
-            <a href="{url}" target="_blank">
-                <button style="background-color:#FFFFFF;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:pointer;margin-bottom: 20px">
-                    Check Invoice Extracted Fields
-                </button>
-            </a>
-            """,
-            unsafe_allow_html=True
-        )
-    else:
-        st.sidebar.selectbox("Select Document to check for compliance", ["No documents available"], disabled=True)
-        st.sidebar.markdown(
-            """
-            <button style="background-color:#CCCCCC;color:black;padding:10px 16px;border:none;border-radius:10px;cursor:not-allowed;margin-bottom: 20px" disabled>
-                📄 Check Invoice Extracted Fields
-            </button>
-            """,
-            unsafe_allow_html=True
-        )
     #load chat history from local history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):

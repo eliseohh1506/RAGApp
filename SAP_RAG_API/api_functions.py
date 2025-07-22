@@ -49,8 +49,8 @@ def get_temp_file_path(file):
 def get_text_from_pdf(file_path):
     texts = []
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=50,
+        chunk_size=800,
+        chunk_overlap=100,
     )
 
     with pdfplumber.open(file_path) as pdf:
@@ -97,7 +97,7 @@ def get_text_from_txt(file):
     texts = []
     loader = TextLoader(file)
     text_documents = loader.load()
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=200)
 
     for i, doc in enumerate(text_documents):
         chunks = text_splitter.split_documents([doc])
@@ -113,34 +113,41 @@ def get_text_from_txt(file):
 
 #function to create llm-chain and return it
 #TO DO - incorporate details from DOX to cross check with policy documents. 
-def get_llm_chain(llm, db, file_name, invoiceDetails):
+def get_llm_chain(llm, db):
 
     # set the prompt templte
     prompt_template = """
-    You are a compliance assistant. Based on the extracted invoice fields and the policy document context, answer the user question.
+    You are an Event Inquiry Chatbot. Based on the user question, answer based on the event context. Show excitement!
 
-    ### Extracted Invoice Fields:
-    {invoiceDetails}
-    
-    ### Policy Document Context:
+    ### Event Document Context:
     {context}
 
     ### User Question:
     {question}
 
     Rules:
-    - Answer question directly and concised
-    - If no compliance check implied by user question, don't do compliance check
-    - Be concise and explain which fields are compliant or non-compliant if asked to compare extracted fields against policy document.
-    - Include the **page** for each policy rule you refer to. 
-    - Page can be derived from metadata of the page_content where policy is found. If unknown, write 'Unknown'.
+    - You MUST extract every event listed, including:
+        - Events with full descriptions and speakers
+        - Events with only a title and time
+        - Events labeled as “Break”, “Spotlight”, “Closing Address”, “Showcase Experience”, or similar
+    - For each event, list:
+        - Title (required)
+        - Time (required)
+        - Description (optional)
+        - Speakers (optional)
+
+    - Do NOT group or summarize multiple events.
+    - Pay extra attention to the time for each event! Its there!!
+    - List each as a separate bullet or numbered item.
+    - If any event lacks a description or speaker, still include it with a note like: "No description provided".
+    - Invite users to reprompt if there are key missing information.
     """
+
     retriever = db.as_retriever(
         search_type="similarity_score_threshold",
         search_kwargs={
-            "k": 5,
-            "score_threshold": 0.3,
-            "filter": {"title": {"$like": "%" + file_name + "%"}}
+            "k": 30,
+            "score_threshold": 0.3
         }
     )
 
@@ -156,23 +163,31 @@ def get_llm_chain(llm, db, file_name, invoiceDetails):
         question = state["question"]
         docs = retriever.get_relevant_documents(question)
         if not docs:
-            docs = db.similarity_search("", 100, 
-                                        filter={"title": {"$like": "%" + file_name + "%"}})
+            docs = db.similarity_search("", 100)
         return {"context": docs}
     
     # Generation step with memory
     def generate(state: ChatState):
         question = state["question"]
+        docs = state["context"]
+
+        # Deduplicate by content or content+metadata
+        seen = set()
+        unique_docs = []
+        for doc in docs:
+            content_key = (doc.page_content.strip(), doc.metadata.get("page"))
+            if content_key not in seen:
+                seen.add(content_key)
+                unique_docs.append(doc)
+
         context = "\n\n".join(
-            f"(Page {doc.metadata.get('page', 'Unknown')})\n{doc.page_content}"
-            for doc in state["context"]
+            f"(Page {doc.metadata.get('page', 'Unknown')}, Document {doc.metadata.get('title', "Unknown")})\n{doc.page_content}"
+            for doc in unique_docs
         )
-        invoice_details = state.get("invoiceDetails", "")
 
         chat_history = state.get("chat_history", [])
         prompt = prompt_template.format(
             question=question,
-            invoiceDetails=invoice_details,
             context=context
         )
 

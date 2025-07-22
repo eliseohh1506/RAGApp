@@ -65,14 +65,9 @@ def dox_upload_file(file, document_type, schema_name):
         raise Exception(f"Failed to upload file to DOX: {response.status_code} - {response.text}")
 
 #function to call the chat api
-def call_chat_api(query, file_name = None, invoiceDetails = None, history = None):
-    if file_name == None:
-        querys = {"query": query}
-    else:
-        querys = {"query": query, "file_name": file_name, 
-                  "invoiceDetails": json.dumps(invoiceDetails) if invoiceDetails else "{}"}
+def call_chat_api(query):
     api_url = "http://127.0.0.1:8000/chat/"
-    resp = requests.post(api_url, data=querys)
+    resp = requests.post(api_url, data={"query": query})
     # print(resp.status_code, resp.text)
     response = resp.json()  # only if status and content look correct
 

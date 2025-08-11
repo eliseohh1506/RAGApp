@@ -93,19 +93,17 @@ def dox_url(invoiceId):
 #fuction to clear data of selected or all docs from hana DB
 @st.experimental_dialog("Are you sure?")
 def clear_data_db(file = None):
-    c1, c2 = st.columns(2)
-    # st.write("Are you sure?")
-    with c1:
-        if st.button("Clear Data"):
-            if file == None:
-                mess = func.delete_table(None)
-            else:
-                s3.delete_objects(Bucket=bucket_name, Delete={"Objects":[
-                    {'Key': file}
-                ]})
-                mess = func.delete_table(file)
-            st.rerun()
-            return mess
+    st.write("Are you sure?")
+    if st.button("Clear Data"):
+        if file == None:
+            mess = func.delete_table(None)
+        else:
+            s3.delete_objects(Bucket=bucket_name, Delete={"Objects":[
+                {'Key': file}
+            ]})
+            mess = func.delete_table(file)
+        st.rerun()
+        return mess
     
 
 #set page config

@@ -27,7 +27,7 @@ history = ChatMessageHistory()
 
 This snippet details the ``/upload`` API end point implementation that we will call in [call_file_api() function](https://github.com/eliseohh1506/RAGApp/blob/main/EXERCISES/3-Understanding-frontendpt1.md#2-upload-file-page--upload-policy-functionality) 
 
-> ### Prerequisite - Set up HANA DB Table correctly
+### Prerequisite - Set up HANA DB Table correctly
 
 > Ensure that you create a new table named "MAV_SAP_RAG". Within this table, you should have 3 columns with the respective COLUMN_NAME, DATA_TYPE_NAME and LENGTH seen below.
 > ![Table metadata](assets/HANA_table.png)

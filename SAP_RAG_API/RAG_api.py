@@ -7,7 +7,7 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from gen_ai_hub.proxy.langchain.openai import ChatOpenAI
 # OpenAIEmbeddings to create text embeddings
 from gen_ai_hub.proxy.langchain.openai import OpenAIEmbeddings
-from gen_ai_hub.proxy import get_proxy_client
+# from gen_ai_hub.proxy import get_proxy_client
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,7 +16,7 @@ load_dotenv()
 app = FastAPI()
 
 #Set up orchestration service 
-aicore_client = get_proxy_client().ai_core_client
+# aicore_client = get_proxy_client().ai_core_client
 #create hanaDB connection and embeddings
 conn = func.get_hana_db_conn()
 embeddings = OpenAIEmbeddings(deployment_id=os.environ.get("EMBEDDING_DEPLOYMENT_ID"))

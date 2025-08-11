@@ -162,6 +162,7 @@ if "messages" not in st.session_state:
         init_chat()
 ```
 
+Clear chat function basically sets ``message`` state variable back to an empty list.
 ```
 #function to clear the local chat history
 @st.experimental_fragment

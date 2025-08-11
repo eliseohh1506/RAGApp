@@ -59,7 +59,6 @@ async def process_input(query: str = Form(...), file_name: str = Form("Temp"), i
     #create vector connection
     db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
 
-    #create langgraph 
     qa_chain = func.get_llm_chain(llm, db, file_name, invoiceDetails)
 
     question_with_invoice = {
@@ -85,5 +84,5 @@ async def clear_data(filter: str = Form("None")): # get filter file name
     #else delete all docs with that file name in metadata
     else:
         db = HanaDB(embedding=embeddings, connection=conn, table_name="MAV_SAP_RAG")
-        db.delete(filter={"source":{"$like": "%"+filter+"%"}})
+        db.delete(filter={"title":{"$like": "%"+filter+"%"}})
         return {"status": "Success"}
